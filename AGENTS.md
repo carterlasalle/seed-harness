@@ -2736,7 +2736,7 @@ uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals
 
 ```sh
 yarn typecheck
-uv run --project python/seed_evolution --with pyright pyright python/seed_evolution
+uv run --project python/seed_evolution --with pyright pyright -p python/seed_evolution python/seed_evolution/src python/seed_evolution/tests
 ```
 
 ### Build
@@ -2942,7 +2942,7 @@ throws. State in `~/.seed`, never the user project. Secrets: none in repo;
   use `node --test "packages/*/src/**/*.test.ts"` or bare `yarn test`.
 - `uv run pytest` without `--project python/seed_evolution` resolves the
   ambient env and fails on native deps; always pass `--project`.
-- `ruff`/`pyright` must run via `uv run --no-project` for the same reason.
+- `ruff` must run via `uv run --no-project`; `pyright` must run via `uv run --project python/seed_evolution --with pyright` with `-p python/seed_evolution` so it resolves the project venv (bare `pyright python/seed_evolution` reports 6 spurious errors).
 - `seed doctor` fails without `SEED_GUARDIAN_URL`; export it or copy
   `.env.example` to `.env` (local only, never committed).
 - `.scc/scc.db` is 700M+ and untracked; never `git add -A` blindly without

@@ -72,7 +72,7 @@ jobs:
         run: uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
 
       - name: Pyright
-        run: uv run --no-project --with pyright pyright python/seed_evolution
+        run: uv run --project python/seed_evolution --with pyright pyright -p python/seed_evolution python/seed_evolution/src python/seed_evolution/tests
 
       - name: Pytest
         run: uv run --project python/seed_evolution pytest python/seed_evolution
