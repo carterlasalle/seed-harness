@@ -33,7 +33,7 @@ jobs:
       - name: Install TS workspaces
         run: yarn install --immutable
 
-      - name: TS tests (108 node:test cases)
+      - name: TS tests (110 node:test cases)
         run: yarn test
 
       - name: TS typecheck (tsc --noEmit per package)
@@ -41,6 +41,9 @@ jobs:
 
       - name: Boundary gate (guardian/organism split)
         run: node scripts/verify-boundaries.ts
+
+      - name: Static gate (schemas + manifests)
+        run: yarn seed schema validate
 
       - name: Research catalog validation
         run: python3 scripts/seed-research-catalog.py

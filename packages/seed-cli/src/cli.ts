@@ -20,6 +20,7 @@ import type { EvalResultSummary, ModelProfile, RunRecord } from "./state.ts";
 import { listModels, profileModel } from "./models.ts";
 import { championHistory, rollbackChampion, showChampion } from "./champion.ts";
 import { refreshResearch } from "./research.ts";
+import { validateSchemas } from "./schema.ts";
 
 // trace:exempt reason=internal-detail
 export const COMMANDS = [
@@ -40,6 +41,7 @@ export const COMMANDS = [
   "champion history",
   "champion rollback <ref> [--reason TEXT]",
   "research refresh",
+  "schema validate",
   "help",
 ] as const;
 
@@ -66,6 +68,7 @@ commands:
   champion history                show champion history
   champion rollback <ref>         rollback champion to ref
   research refresh                revalidate research catalogs
+  schema validate                 validate schemas + manifests (static gate)
   help                            this text
 `;
 
@@ -236,6 +239,23 @@ export async function main(argv: string[]): Promise<number> {
           return 0;
         }
         console.error("usage: seed champion <show|history|rollback REF>");
+        return 1;
+      }
+      case "schema": {
+        // trace:exempt reason=internal-detail
+        if (sub === "validate" || !sub) {
+          const report = validateSchemas();
+          if (json) {
+            emit(report);
+          } else if (report.ok) {
+            console.log(`schemas ok (${report.schemas.length} schemas, ${report.manifests} manifests)`);
+          } else {
+            for (const bad of report.badSchemas) console.log(`FAIL schema: ${bad}`);
+            for (const bad of report.badManifests) console.log(`FAIL manifest: ${bad}`);
+          }
+          return report.ok ? 0 : 1;
+        }
+        console.error("usage: seed schema validate");
         return 1;
       }
       case "research": {

@@ -17,3 +17,4 @@ export * from "./models.ts";
 export * from "./champion.ts";
 export * from "./research.ts";
 export * from "./cli.ts";
+export * from "./schema.ts";

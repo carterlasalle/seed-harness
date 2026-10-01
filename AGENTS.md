@@ -2719,7 +2719,7 @@ cargo test -p seed-guardian --test promotion_rules
 ### Full test
 
 ```sh
-yarn test                       # 108 node:test cases
+yarn test                       # 110 node:test cases
 uv run --project python/seed_evolution pytest python/seed_evolution  # 15 cases
 cargo test --workspace          # 19 guardian tests
 ```
@@ -2843,7 +2843,7 @@ Branch:     >= 90%
 
 Deviation (2026-10-01, honest): no coverage tooling is wired yet, so the
 gate above is policy, not measured evidence. Suites report case counts
-(108 node:test + 15 pytest + 19 cargo), not line/branch percentages. Do
+(110 node:test + 15 pytest + 19 cargo), not line/branch percentages. Do
 not claim the percentages until a coverage run lands; adding the tool is
 future work, not a silent pass.
 

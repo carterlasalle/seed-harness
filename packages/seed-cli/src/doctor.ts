@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadChampion, seedRoot, stateDir } from "./state.ts";
-import { discoverCapabilities } from "./capabilities.ts";
+import { validateSchemas } from "./schema.ts";
 // trace:exempt reason=internal-detail
 export interface DoctorCheck {
   name: string;
@@ -100,48 +100,17 @@ export async function runDoctor(root?: string): Promise<DoctorReport> {
     });
   }
   // trace:exempt reason=internal-detail
-  const schemaFiles = [
-    "capability.schema.json",
-    "event.schema.json",
-    "experiment.schema.json",
-    "hypothesis.schema.json",
-    "model-profile.schema.json",
-  ];
-  // trace:exempt reason=internal-detail
-  const badSchemas: string[] = [];
-  for (const file of schemaFiles) {
-    // trace:exempt reason=internal-detail
-    const path = join(repo, "schemas", file);
-    try {
-      // trace:exempt reason=internal-detail
-      const raw = JSON.parse(readFileSync(path, "utf8")) as { title?: unknown; type?: unknown };
-      if (raw.type !== "object" || typeof raw.title !== "string") badSchemas.push(file);
-    } catch {
-      badSchemas.push(file);
-    }
-  }
+  const schemaReport = validateSchemas(repo);
   checks.push(
-    badSchemas.length === 0
-      ? { name: "schemas", ok: true, detail: `${schemaFiles.length} schemas parse with object titles` }
-      : { name: "schemas", ok: false, detail: `invalid: ${badSchemas.join(", ")}` },
+    schemaReport.ok
+      ? { name: "schemas", ok: true, detail: `${schemaReport.schemas.length} schemas parse with object titles` }
+      : { name: "schemas", ok: false, detail: `invalid: ${schemaReport.badSchemas.join(", ")}` },
   );
-  try {
-    // trace:exempt reason=internal-detail
-    const caps = discoverCapabilities(repo);
-    // trace:exempt reason=internal-detail
-    const badCaps = caps.filter((c) => typeof c.name !== "string" || typeof c.entrypoint !== "string");
-    checks.push(
-      badCaps.length === 0 && caps.length > 0
-        ? { name: "capability-manifests", ok: true, detail: `${caps.length} manifests match schemas/capability.schema.json required fields` }
-        : { name: "capability-manifests", ok: false, detail: badCaps.length > 0 ? `invalid: ${badCaps.map((c) => c.name).join(", ")}` : "no manifests discovered" },
-    );
-  } catch (error) {
-    checks.push({
-      name: "capability-manifests",
-      ok: false,
-      detail: error instanceof Error ? error.message : String(error),
-    });
-  }
+  checks.push(
+    schemaReport.manifests > 0 && schemaReport.badManifests.length === 0
+      ? { name: "capability-manifests", ok: true, detail: `${schemaReport.manifests} manifests match schemas/capability.schema.json required fields` }
+      : { name: "capability-manifests", ok: false, detail: schemaReport.badManifests.length > 0 ? `invalid: ${schemaReport.badManifests.join(", ")}` : "no manifests discovered" },
+  );
   // trace:exempt reason=internal-detail
   let guardianUrl = process.env.SEED_GUARDIAN_URL ?? "";
   // trace:exempt reason=internal-detail

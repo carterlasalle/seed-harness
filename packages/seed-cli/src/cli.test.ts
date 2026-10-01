@@ -54,6 +54,7 @@ test("help lists all commands", async () => {
     "champion history",
     "champion rollback <ref> [--reason TEXT]",
     "research refresh",
+    "schema validate",
     "help",
   ]) {
     assert.ok(lines.includes(expected as (typeof COMMANDS)[number]), `missing command: ${expected}`);
@@ -179,4 +180,9 @@ test("eval smoke proves fail-then-pass on scratch copies", () => {
   assert.equal(summary.failed, 0);
   assert.equal(summary.passed, 2);
   assert.deepEqual(summary.failures, []);
+});
+
+test("schema validate passes on shipped schemas and manifests", async () => {
+  isolate();
+  assert.equal(await main(["schema", "validate"]), 0);
 });

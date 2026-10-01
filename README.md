@@ -44,7 +44,7 @@ echo '{"id": 1, "method": "echo", "params": {"hello": "world"}}' | python3 capab
 ## Test
 
 ```sh
-yarn test                                            # 108 node:test cases across packages/*/src
+yarn test                                            # 110 node:test cases across packages/*/src
 yarn typecheck                                       # tsc --noEmit per package
 cargo test --workspace                               # 19 guardian tests (invariants + roundtrip + promotion)
 uv run --project python/seed_evolution pytest python/seed_evolution  # 15 pytest cases
@@ -53,7 +53,7 @@ uv run --project python/seed_evolution pytest python/seed_evolution  # 15 pytest
 ## Lint
 
 ```sh
-yarn lint                                            # same 108 node:test cases (lint gate)
+yarn lint                                            # same 110 node:test cases (lint gate)
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
 uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
 ```

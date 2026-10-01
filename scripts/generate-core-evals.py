@@ -23,12 +23,12 @@ import sys
 from pathlib import Path
 
 CATEGORIES = (
-    "bugfix",
-    "refactor",
+    "single-edit",
+    "cross-file",
+    "test-fix",
     "feature",
-    "testgen",
-    "docfix",
-    "perf",
+    "config",
+    "navigation",
 )
 
 PER_CATEGORY = 10
@@ -41,12 +41,12 @@ def build_task(category: str, index: int, rng: random.Random) -> dict:
     seq = index + 1
     task_id = f"core-{category}-{seq:02d}"
     subjects = {
-        "bugfix": ("off-by-one in pager", "fix the boundary", "tests fail on last page"),
-        "refactor": ("nested callback helper", "flatten without behavior change", "callers keep signatures"),
-        "feature": ("csv export flag", "add the flag end to end", "flag appears in help"),
-        "testgen": ("uncovered retry path", "cover the retry branch", "coverage rises"),
-        "docfix": ("stale install steps", "sync docs with the script", "commands match"),
-        "perf": ("quadratic dedupe loop", "make it linear", "benchmark budget holds"),
+        "single-edit": ("off-by-one in pager", "fix the boundary in one file", "tests fail on last page"),
+        "cross-file": ("renamed shared symbol", "fix every caller across files", "callers keep signatures"),
+        "test-fix": ("failing retry test", "make the failing test pass", "failing test turns green"),
+        "feature": ("csv export flag", "add the flag end to end across files", "flag appears in help"),
+        "config": ("stale package config", "repair the package configuration", "commands match"),
+        "navigation": ("buried symbol definition", "locate the symbol without editing", "symbol path reported"),
     }
     subject, goal, oracle_hint = subjects[category]
     nonce = rng.randint(1000, 9999)
