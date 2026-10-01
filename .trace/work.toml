@@ -1,0 +1,8 @@
+[work."WORK-TL-001"]
+title = "Enforce first-marker traceability"
+[work."WORK-SEED-6VF90M7B"]
+title = "Seed v1 self-evolving harness"
+status = "active"
+origin.source = "greenfield_project"
+origin.intent = "Build minimal self-evolving coding-agent harness with immutable Guardian evaluator and evolvable Organism"
+origin.session = "default"

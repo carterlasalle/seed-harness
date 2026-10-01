@@ -1,0 +1,16 @@
+{
+  "$comment": "Builtin python capability manifest. [trace:v1 id=impl.builtin-python-cap work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN]",
+  "name": "builtin/python",
+  "version": "0.1.0",
+  "kind": "python",
+  "entrypoint": "seed_runtime.python_tool",
+  "description": "Builtin confined python tool primitive.",
+  "tools": [
+    "python"
+  ],
+  "permissions": [],
+  "limits": {
+    "timeoutMs": 5000,
+    "maxOutputBytes": 65536
+  }
+}

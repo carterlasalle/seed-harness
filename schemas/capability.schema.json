@@ -1,0 +1,75 @@
+{
+  "$comment": "Seed schema. Capability package manifest (spec section 23: registry validates, activates, routes). [trace:v1 id=impl.schemas work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN satisfies=REQ-SEED-AJZXZFBN]",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SeedCapability",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "kind",
+    "entrypoint"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)?$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "python",
+        "process"
+      ]
+    },
+    "entrypoint": {
+      "type": "string",
+      "description": "Module path (python) or executable (process)"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "fs.read",
+          "fs.write",
+          "net",
+          "exec"
+        ]
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxOutputBytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "abi": {
+      "type": "string",
+      "enum": [
+        "jsonl-stdio"
+      ],
+      "description": "Process ABI (spec section 25)"
+    }
+  },
+  "additionalProperties": false
+}

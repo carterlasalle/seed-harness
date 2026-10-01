@@ -1,0 +1,103 @@
+# research/mechanisms.yaml — Lab and eval mechanisms Seed runs.
+# Purpose: Lab and eval mechanisms Seed runs. Each entry: id/title/source/tags/problemClasses/
+# mechanismSummary/implementationIdeas plus hashline (sha256 of the
+# mechanismSummary text, recomputed by scripts/seed-research-catalog.py per
+# spec section 93) and snapcompact (<source-ref>@<revision> per section 94).
+# Invariant: every entry carries both references; validator enforces it.
+# trace:v1 id=impl.research-mechanisms work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+- id: friction-rules
+  title: Deterministic friction rules
+  source: spec:seed-lab
+  tags: [mechanism, deterministic]
+  problemClasses: [signal-extraction]
+  mechanismSummary: |
+    Friction rules are pure functions over telemetry: stall (no progress events in N minutes), thrash (same file edited 3+ times), tool-loop (same failing call repeated), budget-burn (cost rate above governor line). Deterministic means unit-testable and ungameable by the organism — rules are guardian-side code.
+  implementationIdeas:
+    - "Pure functions: events in, friction labels out"
+    - Unit tests per rule with synthetic event streams
+  hashline: sha256:5842f748fc62b34f0e93c76a9509c58c5ec0609433d9d9dcde6dba64401ee7b2
+  snapcompact: spec:seed-lab@2026-10-01
+- id: governor-budgets
+  title: Governor budgets
+  source: spec:seed-lab
+  tags: [mechanism, cost-control]
+  problemClasses: [runaway-spend]
+  mechanismSummary: |
+    The governor caps spend per task, per experiment, and per day, and kills runs that exceed them. Budgets are enforced by the guardian (immutable), never self-reported by the organism. Exhaustion is a normal terminal state with partial-result reporting, not an error.
+  implementationIdeas:
+    - Guardian-side kill switch on budget events
+    - Partial results always preserved on kill
+  hashline: sha256:09300fa8328bab6516dcaae8fbf89c84b4d20880e3406ff5b7c451248197cd9a
+  snapcompact: spec:seed-lab@2026-10-01
+- id: crystallization
+  title: Crystallization triggers
+  source: spec:seed-lab
+  tags: [mechanism, reuse]
+  problemClasses: [pattern-reuse]
+  mechanismSummary: |
+    A behavior crystallizes into a capability when it succeeds 3+ times across distinct tasks with passing tests. The trigger is a counted rule, not a judgment call, so the organism cannot lobby for its own promotion. Output is a full capability package with fixture.
+  implementationIdeas:
+    - "Counted trigger: 3 successes, distinct tasks"
+    - Crystallizer output validated against capability schema
+  hashline: sha256:5274a0d7809991948dcd3a9ac78a40ba90b81d40fe15b4af6d1beef3225433b2
+  snapcompact: spec:seed-lab@2026-10-01
+- id: pareto-archive
+  title: Pareto archive with limit
+  source: spec:seed-eval
+  tags: [mechanism, selection]
+  problemClasses: [multi-objective]
+  mechanismSummary: |
+    Candidates live in a size-capped Pareto archive over score and cost axes. Promotion requires non-inferiority: beat or tie the champion on every axis, strictly better on one. The archive cap forces eviction of dominated candidates, keeping evaluation cheap and lineage short.
+  implementationIdeas:
+    - Archive cap with dominate-and-evict
+    - Lineage refs from candidate to parent
+  hashline: sha256:1c44af6f4388faef15433c0e23a370edda17c3619b23ce1bb9cff59c13ff9ff8
+  snapcompact: spec:seed-eval@2026-10-01
+- id: champion-challenger
+  title: Champion/challenger with rollback
+  source: spec:seed-eval
+  tags: [mechanism, safety]
+  problemClasses: [regression]
+  mechanismSummary: |
+    One champion serves; challengers train in worktrees and promote only through gates. The champion pointer moves atomically and rollback is one pointer write. Sessions pin the champion at start so in-flight tasks never see a mid-run switch.
+  implementationIdeas:
+    - Atomic pointer move for promotion
+    - Session-pinned champion refs
+  hashline: sha256:7252d3738d2134ce101040c593e7f3fc10791c88fe0d6d2d12c22261035f5436
+  snapcompact: spec:seed-eval@2026-10-01
+- id: bm25-router
+  title: "BM25 router, max 8 visible"
+  source: spec:seed-capability
+  tags: [mechanism, retrieval]
+  problemClasses: [context-budget]
+  mechanismSummary: |
+    The router ranks capability cards with BM25 over name, description, and tool names, exposing at most 8 to the task agent. The bound is a hard invariant (unit-tested), keeping prompt size predictable and forcing capabilities to earn visibility with good descriptions.
+  implementationIdeas:
+    - Hard cap of 8 with unit test
+    - "Rank over manifest text only, no embeddings"
+  hashline: sha256:e61982f7281d908f18ec037f6077b546dd513f996a6124ec4c73dcf1a9d99b23
+  snapcompact: spec:seed-capability@2026-10-01
+- id: worktree-isolation
+  title: Worktree isolation per task
+  source: spec:seed-guardian
+  tags: [mechanism, isolation]
+  problemClasses: [interference]
+  mechanismSummary: |
+    Every task runs in its own git worktree under the scratch root; the organism sees only its worktree plus SEED_SCRATCH. Merges happen through guardian gates, never by direct push. Isolation makes results reproducible and failures contained.
+  implementationIdeas:
+    - Guardian-owned worktree lifecycle
+    - "Scratch confinement enforced, not requested"
+  hashline: sha256:ca169605a47d4916fc522bdbf1feb58a58c0a0ab900ce68cba0e15b4eb475d0f
+  snapcompact: spec:seed-guardian@2026-10-01
+- id: eval-gates
+  title: Static/unit/replay/holdout gates
+  source: spec:seed-eval
+  tags: [mechanism, gating]
+  problemClasses: [unsafe-promotion]
+  mechanismSummary: |
+    Four gates in order: static (lint, schema, boundary checks), unit (deterministic tests), replay (past tasks must still pass), holdout (unseen tasks). A broken candidate must fail at the earliest gate. Gates are cheapest-first so rejection is fast.
+  implementationIdeas:
+    - Cheapest gate first ordering
+    - Broken-candidate fixture rejected in tests
+  hashline: sha256:100b8ebd6dd7b926f99f7e09d5dbe42da915c1ce0d6c647f63a9486fdab91d1b
+  snapcompact: spec:seed-eval@2026-10-01

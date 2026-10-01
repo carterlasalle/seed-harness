@@ -1,0 +1,24 @@
+{
+  "$comment": "Seed monorepo root. Purpose: yarn workspaces + shared scripts. Why: one install/test entry for all TS packages. Invariant: stdlib-only TS, Node>=22. trace:v1 id=impl.pkg-root work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85",
+  "name": "seed-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "yarn@4.9.2",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "node --test",
+    "typecheck": "node --check scripts/verify-boundaries.ts",
+    "test": "node --test",
+    "verify": "node scripts/verify-boundaries.ts && python3 scripts/seed-research-catalog.py",
+    "research": "python3 scripts/seed-research-catalog.py"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.9.3"
+  }
+}

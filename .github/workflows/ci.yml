@@ -1,0 +1,60 @@
+# Seed CI — gates every slice (REQ-SEED-EZPD6B85).
+# Purpose: one workflow running all v1 gates: TS tests, boundary gate,
+# research catalog, Rust fmt/clippy/test, ruff/pytest, eval smoke.
+# Why: promotion and merge decisions trust these gates; red CI blocks.
+# trace:v1 id=impl.ci work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+name: ci
+
+on:
+  push: {}
+  pull_request: {}
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (apt)
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable corepack (yarn 4.9.2)
+        run: corepack enable
+
+      - name: Install TS workspaces
+        run: yarn install --immutable
+
+      - name: TS tests
+        run: yarn test
+
+      - name: Boundary gate (guardian/organism split)
+        run: node scripts/verify-boundaries.ts
+
+      - name: Research catalog validation
+        run: python3 scripts/seed-research-catalog.py
+
+      - name: Rust fmt
+        run: cargo fmt --check
+
+      - name: Rust clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Rust tests (guardian)
+        run: cargo test --workspace
+
+      - name: Install Python tools
+        run: pip install --upgrade ruff pytest
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Pytest
+        run: python3 -m pytest
+
+      - name: Eval smoke (echo fixture roundtrip)
+        run: >
+          echo '{"id": 1, "method": "echo", "params": {"hello": "world"}}' | python3 capabilities/fixtures/echo/server.py | python3 -c "import json,sys; assert json.load(sys.stdin)['result'] == {'hello': 'world'}, 'echo smoke failed'; print('eval smoke ok')"

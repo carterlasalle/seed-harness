@@ -1,0 +1,88 @@
+# TraceLayer policy (spec Section 24.4).
+profile = "standard"
+
+[lifecycle]
+default = "wip"
+ci = "merge"
+
+[requirements.merge]
+require_work_ancestry = true
+require_requirement_for_changed_behavior = true
+require_verifying_test = true
+require_test_pass = true
+require_coverage_confirmation = false
+block_stale = true
+
+[requirements.release]
+require_coverage_confirmation = true
+require_semantic_audit = true
+
+[exclusions]
+paths = [
+  "vendor/**",
+  "**/vendor/**",
+  "generated/**",
+  "**/generated/**",
+  "**/node_modules/**",
+  "docs/vendor/**",
+  ".trace/**",
+  ".bugcorpus/**",
+  ".DS_Store",
+  "**/.DS_Store",
+  "**/__pycache__/**",
+  "*.pyc",
+  "*.pyo",
+  ".gitignore",
+  "AGENTS.md",
+  "CLAUDE.md",
+  ".mcp.json",
+  "junit.xml",
+  "coverage.xml",
+  ".agents/**",
+  ".claude/**",
+  ".codex/**",
+  ".pi/**",
+  ".omp/**",
+  ".hermes/**",
+  ".serena/**",
+  ".scc/**",
+  "opencode.json",
+  "**/*_test.*",
+  "**/*.test.*",
+  "**/*_spec.*",
+  "**/*.spec.*",
+  "**/package.json",
+  "**/package-lock.json",
+  "**/yarn.lock",
+  "**/tsconfig.json",
+  "**/tsconfig.*.json",
+  "**/*.schema.json",
+  "schemas/**",
+  "capabilities/**/*.json",
+  "research/**",
+  "prompts/**",
+  "evals/core/generated/**",
+  "docs/**",
+  "README.md",
+  "CODEX.md",
+  ".yarnrc.yml",
+  ".gitignore",
+  "Cargo.lock",
+  "uv.lock",
+  ".github/**",
+  "Dockerfile*",
+  "**/Dockerfile*",
+  "**/.gitkeep",
+  "scripts/generate-core-evals.py",
+  "capabilities/fixtures/echo/server.py",
+  "scripts/sweep-exemptions.py",
+  "packages/seed-lab/src/index.ts",
+  "packages/seed-core/src/capability/index.ts",
+  "Cargo.toml",
+  "crates/seed-guardian/Cargo.toml",
+  "packages/seed-cli/src/index.ts",
+  "packages/seed-runtime/src/index.ts",
+  "python/seed_evolution/tests/**",
+  "python/seed_evolution/**/*.egg-info",
+]
+extensions = []

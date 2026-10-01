@@ -1,0 +1,62 @@
+{
+  "$comment": "Seed schema. Evolution experiment record (spec section 59: GEPA contract, mutation reports). [trace:v1 id=impl.schemas work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN satisfies=REQ-SEED-D5V8QCMS]",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SeedExperiment",
+  "type": "object",
+  "required": [
+    "id",
+    "hypotheses",
+    "candidate",
+    "tasks"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "parent": {
+          "type": "string"
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "promoted",
+        "rejected"
+      ]
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    }
+  },
+  "additionalProperties": false
+}

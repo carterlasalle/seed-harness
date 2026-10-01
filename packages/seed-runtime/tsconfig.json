@@ -1,0 +1,11 @@
+{
+  "$comment": "tsconfig for @seed-runtime. Purpose: extend base with package-local outDir/rootDir. Invariant: outDir dist, rootDir src, include src only. trace:v1 id=impl.tsconfig-seed-runtime work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src"
+  ]
+}

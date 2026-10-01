@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "bugcorpus": {
+      "command": "bugcorpus",
+      "args": [
+        "mcp"
+      ]
+    },
+    "tracelayer": {
+      "command": "tracelayer",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,139 @@
+# research/papers.yaml — Self-improvement papers Seed implements.
+# Purpose: Self-improvement papers Seed implements. Each entry: id/title/source/tags/problemClasses/
+# mechanismSummary/implementationIdeas plus hashline (sha256 of the
+# mechanismSummary text, recomputed by scripts/seed-research-catalog.py per
+# spec section 93) and snapcompact (<source-ref>@<revision> per section 94).
+# Invariant: every entry carries both references; validator enforces it.
+# trace:v1 id=impl.research-papers work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+- id: gepa
+  title: "GEPA: reflective prompt evolution"
+  source: arxiv:2507.19457
+  tags: [paper, prompt-evolution]
+  problemClasses: [prompt-optimization]
+  mechanismSummary: |
+    GEPA evolves prompts by reflecting on execution traces in natural language: propose a prompt change, test it, keep it if scores improve. No gradients, no weight updates — the LM itself is the mutation and reflection operator. Seed's evolution package implements the GEPA contract directly (propose/test/keep with parent refs).
+  implementationIdeas:
+    - seed-gepa CLI runs propose/test/keep loop
+    - Parent refs make every prompt mutation reversible
+  hashline: sha256:62b1061182386ecefbae5c825b3ee589e5448ce659ff297b9f84823083d200c8
+  snapcompact: arxiv:2507.19457@v1
+- id: darwin-godel-machine
+  title: Darwin Godel Machine
+  source: arxiv:2505.22954
+  tags: [paper, self-improvement]
+  problemClasses: [open-ended-improvement]
+  mechanismSummary: |
+    The Darwin Godel Machine lets an agent rewrite its own code, keeping rewrites that improve benchmark scores, with lineage tracking. The safety lesson is explicit: the evaluator and archive must be outside the rewrite scope. Seed hardens this into the guardian/organism split.
+  implementationIdeas:
+    - Lineage-tracked mutations with parent refs
+    - Evaluator outside rewrite scope (guardian)
+  hashline: sha256:f576733e0ed2dcd3ef139f29dacb9552a79495b08b352def696896adc65dfccb
+  snapcompact: arxiv:2505.22954@v1
+- id: adas
+  title: "ADAS: automated design of agentic systems"
+  source: arxiv:2410.06427
+  tags: [paper, agent-search]
+  problemClasses: [architecture-search]
+  mechanismSummary: |
+    ADAS searches the space of agentic system designs (prompts, control flow, tool graphs) with an LM inventor and automated evaluation. Seed's lab is a narrow ADAS: fixed outer loop (scientist/mutation/challenge) searching prompt and router space only, never evaluator space.
+  implementationIdeas:
+    - Fixed outer loop; search prompt+router space only
+    - LM inventor role maps to mutation agent
+  hashline: sha256:8332410cd99e90fbe44533b906be36fe3e87f8b57fe5eab4e3aaaa4c7601d4fc
+  snapcompact: arxiv:2410.06427@v1
+- id: self-improving-coding-agent
+  title: Self-Improving Coding Agent (SICA)
+  source: arxiv:2503.08690
+  tags: [paper, self-improvement]
+  problemClasses: [coding-improvement]
+  mechanismSummary: |
+    SICA improves a coding agent by training on its own successful trajectories, filtered by test outcomes. The filter is the whole game: only verified successes become training signal. Seed's crystallization trigger (3+ successes across distinct tasks) is the same filter in rule form.
+  implementationIdeas:
+    - Crystallize only test-verified repeated successes
+    - Friction logs as trajectory store
+  hashline: sha256:512afcc9589fe6f99975ae04f0f3e68c4e832bd9c8c69498f41944db48dc2550
+  snapcompact: arxiv:2503.08690@v1
+- id: godel-agent
+  title: "Godel Agent: self-referential optimization"
+  source: arxiv:2412.04455
+  tags: [paper, self-reference]
+  problemClasses: [recursive-improvement]
+  mechanismSummary: |
+    Godel Agent recursively improves its own solver under a utility function, with each generation verified against held-out tasks. Unchecked recursion is the failure mode; held-out verification is the fix. Seed maps this to champion/challenger with holdout gates before any promotion.
+  implementationIdeas:
+    - "Challenger must beat champion on holdout, not just train tasks"
+    - Utility function equals promotion rule in code
+  hashline: sha256:bc24b3abc75d02566277c66c003b84ae8d410c035227323d0ad55e58701f4322
+  snapcompact: arxiv:2412.04455@v1
+- id: latm
+  title: "LATM: language models as tool makers"
+  source: arxiv:2312.03877
+  tags: [paper, tool-making]
+  problemClasses: [tool-synthesis]
+  mechanismSummary: |
+    LATM splits tool making (strong model writes reusable functions) from tool using (weaker model calls them). Capability crystallization is LATM productionized: scientist-grade patterns become tools the everyday task agent consumes without understanding their internals.
+  implementationIdeas:
+    - "Crystallizer as tool maker, task agent as tool user"
+    - Version crystallized tools independently
+  hashline: sha256:5b108470920efe6c2b6054427c467adee3300ba0ccd621094aa32a6c419322db
+  snapcompact: arxiv:2312.03877@v1
+- id: skillweaver
+  title: "SkillWeaver: self-improving skill library"
+  source: arxiv:2412.08755
+  tags: [paper, skills]
+  problemClasses: [skill-acquisition]
+  mechanismSummary: |
+    SkillWeaver synthesizes reusable API-call skills from repeated trajectories and stores them in a library with tests. Each skill ships with a self-check. Seed capabilities follow the same contract: manifest plus fixture proving install, execute, unload.
+  implementationIdeas:
+    - Every capability ships with a fixture test
+    - Skill library maps to capabilities/ registry
+  hashline: sha256:77b9eb93b93bfaff989be0b98e180c1bfa1c88b18e78ca370cbbc2138f6f190b
+  snapcompact: arxiv:2412.08755@v1
+- id: agent-workflow-memory
+  title: Agent Workflow Memory (AWM)
+  source: web:agent-workflow-memory
+  tags: [paper, memory]
+  problemClasses: [reuse, routines]
+  mechanismSummary: |
+    AWM stores reusable sub-routines from past agent runs and retrieves them for new tasks, turning one-off successes into workflows. Seed friction clustering is AWM's ingestion stage; crystallization is its commit stage. The retrieval bound (BM25, max 8) keeps recall cheap.
+  implementationIdeas:
+    - Friction clusters feed routine extraction
+    - BM25-bounded retrieval for routines
+  hashline: sha256:66e28bb162370dfe05c3d0838f08bf79da756154d22c1af15ad6bcfcab6be9ad
+  snapcompact: web:agent-workflow-memory-placeholder@v1
+- id: reflexion
+  title: "Reflexion: verbal reinforcement"
+  source: arxiv:2303.11366
+  tags: [paper, reflection]
+  problemClasses: [error-recovery]
+  mechanismSummary: |
+    Reflexion agents self-reflect in natural language after failures and retry with the reflection in context — no weight updates. Seed's mutation reports and scientist hypotheses are persistent, cross-task Reflexion: reflections that survive the episode and compound.
+  implementationIdeas:
+    - "Persist reflections as hypotheses, not just context"
+    - Retry with reflection attached in task brief
+  hashline: sha256:79f83b4ddf7577f9016aa1c9bb3d3c8d7df69e6d85a8f15ca5437814af7967d8
+  snapcompact: arxiv:2303.11366@v1
+- id: self-refine
+  title: "Self-Refine: iterative self-feedback"
+  source: arxiv:2303.17651
+  tags: [paper, refinement]
+  problemClasses: [output-quality]
+  mechanismSummary: |
+    Self-Refine loops generate, critique, refine on a single task with few-shot critics. The loop needs a stopping rule or it burns budget polishing. Seed's governor budgets plus non-inferiority promotion are the stopping rule: refine while cheap and measurably better.
+  implementationIdeas:
+    - Governor budgets cap refinement loops
+    - Promote only measurably-better refinements
+  hashline: sha256:19861c69aa19592d5f265946a9e468f0ad8b6796881b7f8e562d0ef10a396420
+  snapcompact: arxiv:2303.17651@v1
+- id: toolformer
+  title: "Toolformer: self-supervised tool learning"
+  source: arxiv:2302.04761
+  tags: [paper, tool-learning]
+  problemClasses: [tool-use]
+  mechanismSummary: |
+    Toolformer learns when API calls help by sampling candidate calls and keeping those that reduce loss — tool use learned from measured benefit, not prescription. Seed's router learns the same way: capabilities earn visibility from measured task lift, capped at 8 visible.
+  implementationIdeas:
+    - Router weights from measured task lift
+    - Drop capabilities with zero measured lift
+  hashline: sha256:462ec1f4cc7e1c5b1f318dddccece29afff90d70af19711b89b52ec5ad1b22a4
+  snapcompact: arxiv:2302.04761@v1

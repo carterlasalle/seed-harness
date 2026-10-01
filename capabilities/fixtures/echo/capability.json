@@ -1,0 +1,17 @@
+{
+  "$comment": "Echo fixture capability (spec section 25 JSONL ABI). [trace:v1 id=impl.echo-fixture work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN]",
+  "name": "fixtures/echo",
+  "version": "0.1.0",
+  "kind": "process",
+  "entrypoint": "server.py",
+  "abi": "jsonl-stdio",
+  "description": "Test fixture: echoes params back over JSONL stdio.",
+  "tools": [
+    "echo"
+  ],
+  "permissions": [],
+  "limits": {
+    "timeoutMs": 5000,
+    "maxOutputBytes": 65536
+  }
+}

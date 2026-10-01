@@ -1,0 +1,16 @@
+{
+  "$comment": "Seed TS base config. Purpose: single strict baseline for all packages. Why: one place for strict/nodenext/es2022 so packages cannot drift. Invariant: strict true, module+resolution nodenext, target es2022, outDir dist, rootDir src. trace:v1 id=impl.tsconfig-base work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85",
+  "compilerOptions": {
+    "strict": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "sourceMap": true,
+    "skipLibCheck": true
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$comment": "Seed schema. Telemetry/event envelope (spec sections 41-42: organism emits, guardian persists). [trace:v1 id=impl.schemas work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN satisfies=REQ-SEED-YM8XJREE]",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SeedEvent",
+  "type": "object",
+  "required": [
+    "type",
+    "timestamp",
+    "session"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z]+\\.[a-z-]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "session": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    },
+    "candidate": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

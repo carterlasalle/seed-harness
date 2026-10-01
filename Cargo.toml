@@ -1,0 +1,7 @@
+# Seed v1 workspace root (Rust side).
+# Purpose: pins the Cargo workspace; all Rust code lives in crates/*.
+# Why: single workspace so `cargo test --workspace` gates the guardian.
+# Invariants: members list matches crates/* dirs; resolver v2; no deps here.
+[workspace]
+resolver = "2"
+members = ["crates/seed-guardian"]

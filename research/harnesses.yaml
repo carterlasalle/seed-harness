@@ -1,0 +1,127 @@
+# research/harnesses.yaml — Coding-harness mechanisms Seed learns from.
+# Purpose: Coding-harness mechanisms Seed learns from. Each entry: id/title/source/tags/problemClasses/
+# mechanismSummary/implementationIdeas plus hashline (sha256 of the
+# mechanismSummary text, recomputed by scripts/seed-research-catalog.py per
+# spec section 93) and snapcompact (<source-ref>@<revision> per section 94).
+# Invariant: every entry carries both references; validator enforces it.
+# trace:v1 id=impl.research-harnesses work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+- id: pi
+  title: Pi coding agent (earendil-works/pi)
+  source: github:earendil-works/pi
+  tags: [harness, agent-loop, extensions]
+  problemClasses: [routine-coding, tool-use]
+  mechanismSummary: |
+    Pi runs a tool-calling agent loop over an extensible tool set with session hooks and skills. Extensions observe lifecycle events (session start, tool call, turn end) and inject context. Seed's baseline pins one reviewed Pi revision (exact pin in docs/BASELINE.md) and wraps it via npm deps; the organism reuses Pi's loop shape while the guardian stays separate.
+  implementationIdeas:
+    - Reuse Pi extension-event shape for guardian telemetry hooks
+    - Port Pi skill format for crystallized capabilities
+  hashline: sha256:3bf5dd9046a01eb4abf31cc52fb950365b752edc54d6ebd264dfc3a5de007586
+  snapcompact: github:earendil-works/pi@baseline-2026-10-01
+- id: oh-my-pi
+  title: Oh My Pi harness (scc + tracelayer extensions)
+  source: github:local-oh-my-pi
+  tags: [harness, indexing, traceability]
+  problemClasses: [context-freshness, audit]
+  mechanismSummary: |
+    Oh My Pi layers startup-context injection (scc), update checks, and trace-gate verification onto Pi via extension hooks. Every file mutation triggers re-indexing and obligation checks. Seed borrows the gate-before-merge idea for promotion and the startup-pack idea for scientist context.
+  implementationIdeas:
+    - Promotion gate modeled on trace-gate verify
+    - Scientist context pack modeled on scc startup artifact
+  hashline: sha256:25649c0de108305310d404a0f8185322e13ccd2535ee58a62eebadae95739b07
+  snapcompact: local:oh-my-pi-extensions@2026-10-01
+- id: aider
+  title: Aider pair-programming agent
+  source: github:aider-ai/aider
+  tags: [harness, editing, repo-map]
+  problemClasses: [code-editing, large-repo]
+  mechanismSummary: |
+    Aider pairs chat with whole-repo maps (ctags + ranking) and diff-style edits applied by search/replace blocks. The repo map is the core mechanism: compress the codebase into a ranked symbol summary that fits context. Seed's router uses the same ranking instinct with BM25 over capability cards capped at 8.
+  implementationIdeas:
+    - BM25 capability cards as repo-map analogue
+    - Search/replace edit discipline for task agent
+  hashline: sha256:badd6e4f7bb64656447c22174e8623dea2bb6cb842395484daec87ebd0f14ecd
+  snapcompact: github:aider-ai/aider@v0.82
+- id: swe-agent
+  title: SWE-agent ACI loop
+  source: github:SWE-agent/SWE-agent
+  tags: [harness, aci, benchmark]
+  problemClasses: [bug-fixing, terminal-use]
+  mechanismSummary: |
+    SWE-agent wraps the LM in an agent-computer interface: thought then action, with file viewer, editor, and shell tools over SWE-bench tasks. Its contribution is interface minimalism — few well-designed tools beat many ad-hoc ones. Seed's single-python-primitive organism follows the same minimalism.
+  implementationIdeas:
+    - Keep organism primitive count at one (python tool)
+    - Thought/action transcript as friction-log source
+  hashline: sha256:46fa2c616cbc8c49e94074687e3654b947c54a14084e167d0897446ccaf49839
+  snapcompact: github:SWE-agent/SWE-agent@v2.0
+- id: hermes-agent
+  title: Hermes Agent skills system
+  source: github:local-hermes
+  tags: [harness, skills]
+  problemClasses: [reuse, onboarding]
+  mechanismSummary: |
+    Hermes Agent organizes behavior into composable skills with front-matter metadata and progressive disclosure. Skills activate by relevance, not by stuffing all docs into context. Seed capabilities copy this: manifest metadata plus BM25-bounded visibility.
+  implementationIdeas:
+    - Capability manifest fields mirror skill front-matter
+    - Progressive disclosure for tool docs
+  hashline: sha256:982ea7aadae1885b9da5762766f3e802294265e658e44f45d4d7499cad65816e
+  snapcompact: local:hermes-skills@2026-10-01
+- id: openhands
+  title: OpenHands event-stream sandbox
+  source: github:All-Hands-AI/OpenHands
+  tags: [harness, sandbox, events]
+  problemClasses: [safe-execution, replay]
+  mechanismSummary: |
+    OpenHands runs agents in Docker sandboxes with a unified event stream (actions and observations) that enables replay and scoring. Seed takes worktree isolation plus an append-only telemetry log as the lightweight equivalent, with full Docker evals reserved for promotion gates.
+  implementationIdeas:
+    - Worktree-per-task as cheap sandbox
+    - Event stream maps to Seed telemetry envelope
+  hashline: sha256:33f67b9ff06420b7b049830c7acf9c164e04dbd63c1712b349e1b9dcf3698ba1
+  snapcompact: github:All-Hands-AI/OpenHands@v0.30
+- id: goose
+  title: Block Goose recipes and extensions
+  source: github:block/goose
+  tags: [harness, recipes, mcp]
+  problemClasses: [repeatable-workflows, tool-use]
+  mechanismSummary: |
+    Goose encodes repeatable agent workflows as recipes (declarative YAML) and extends tools via MCP servers. Recipes are versioned, shareable, and headless-runnable. Seed crystallization outputs the same artifact shape: a capability package plus a runnable recipe.
+  implementationIdeas:
+    - Crystallized capability ships with a headless recipe test
+    - MCP-shaped tool manifests
+  hashline: sha256:5151ff57139754e0d6cdbf71613cbf1f967641df6fd66b5d72ef5e02f85021af
+  snapcompact: github:block/goose@v1.0
+- id: claude-code-concepts
+  title: "Claude Code concepts (subagents, hooks, memory)"
+  source: docs:anthropic-claude-code
+  tags: [harness, concepts, delegation]
+  problemClasses: [decomposition, policy]
+  mechanismSummary: |
+    Claude Code's transferable concepts: subagent delegation with isolated context, lifecycle hooks (PreToolUse/PostToolUse) for policy, slash-command prompts, and MEMORY files. Seed maps hooks to guardian gates, subagents to worktree tasks, and memory files to crystallized prompts.
+  implementationIdeas:
+    - PreToolUse-style policy checks in guardian gates
+    - Crystallizer writes MEMORY-style prompt fragments
+  hashline: sha256:01e83e1f1b1dcc36668ea3bdd20dc1c31388dc46234a744e4b2fa79906118813
+  snapcompact: docs:anthropic-claude-code@2026-09
+- id: gemini-cli-concepts
+  title: "Gemini CLI concepts (tools, extensions, sandbox)"
+  source: docs:google-gemini-cli
+  tags: [harness, concepts, sandbox]
+  problemClasses: [safe-execution, extensibility]
+  mechanismSummary: |
+    Gemini CLI's transferable concepts: declarative tool schemas with approval tiers, installable extensions, and OS-level sandboxing profiles per command. Seed adopts approval tiers as capability permissions (fs.read/fs.write/net/exec) and sandbox profiles as organism timeout/cwd confinement.
+  implementationIdeas:
+    - Capability permissions mirror approval tiers
+    - Per-capability timeout/limits mirror sandbox profiles
+  hashline: sha256:d57580dddf8c8a4872dc0c1c30cfa465ce1c2f25b00fc6ed4b9c4ec1f86855f9
+  snapcompact: docs:google-gemini-cli@2026-09
+- id: opencode-concepts
+  title: "OpenCode concepts (providers, agents config)"
+  source: github:sst/opencode
+  tags: [harness, concepts, config]
+  problemClasses: [model-portability, config]
+  mechanismSummary: |
+    OpenCode's transferable concepts: provider-agnostic model routing via config, per-agent instruction files, and a TUI over one engine. Seed's model profiler plus model-agnostic prompts follow the same split: route by measured profile, keep prompts portable across models.
+  implementationIdeas:
+    - Model profiles drive routing like provider config
+    - One prompt set across models; profile per model
+  hashline: sha256:14fa3d2c93fa23f69ce4e023bddc0ebeb8df2121edac69add9a74980d569607a
+  snapcompact: github:sst/opencode@v1.0

@@ -1,0 +1,21 @@
+# seed-evolution: GEPA-style prompt/weight evolution package (REQ-SEED-D5V8QCMS).
+# Stdlib-only runtime; `seed-gepa` entry point lands under TASK-SEED-7QCRZK5B.
+[project]
+name = "seed-evolution"
+version = "0.1.0"
+description = "Seed evolution loop: GEPA contract, scientist, mutation reports"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[project.scripts]
+seed-gepa = "seed_evolution.gepa_optimizer:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
