@@ -55,9 +55,25 @@ export interface CapabilityActivation {
 }
 
 // trace:exempt reason=internal-detail
+export type CapabilityContributionKind =
+  | "tool"
+  | "skill"
+  | "hook"
+  | "extension"
+  | "mcp"
+  | "lsp"
+  | "agent"
+  | "codec"
+  | "edit-protocol"
+  | "memory"
+  | "model-policy"
+  | "optimizer";
+
+// trace:exempt reason=internal-detail
 export interface CapabilityContribution {
   id: string;
   description: string;
+  kind: CapabilityContributionKind;
 }
 
 // trace:exempt reason=internal-detail
@@ -279,7 +295,7 @@ function parseContributions(source: Record<string, unknown>, issues: string[]): 
     // trace:exempt reason=internal-detail
     const entry = item as Record<string, unknown>;
     // trace:exempt reason=internal-detail
-    rejectUnknownKeys(entry, { id: true, description: true }, '"contributions" entry', issues);
+    rejectUnknownKeys(entry, { id: true, description: true, kind: true }, '"contributions" entry', issues);
     // trace:exempt reason=internal-detail
     const id = readString(entry, "id", issues, true);
     if (id === null) continue;
@@ -288,7 +304,22 @@ function parseContributions(source: Record<string, unknown>, issues: string[]): 
       continue;
     }
     seen[id] = true;
-    out.push({ id, description: readString(entry, "description", issues, false) ?? "" });
+    // trace:exempt reason=internal-detail
+    const rawKind = entry["kind"];
+    // trace:exempt reason=internal-detail
+    const kinds: readonly CapabilityContributionKind[] = [
+      "tool", "skill", "hook", "extension", "mcp", "lsp",
+      "agent", "codec", "edit-protocol", "memory", "model-policy", "optimizer",
+    ];
+    // trace:exempt reason=internal-detail
+    const kind = typeof rawKind === "string" && (kinds as readonly string[]).includes(rawKind)
+      ? (rawKind as CapabilityContributionKind)
+      : "tool";
+    if (rawKind !== undefined && kind === "tool" && rawKind !== "tool") {
+      issues.push(`contribution "${id}" has unknown kind ${JSON.stringify(rawKind)}`);
+      continue;
+    }
+    out.push({ id, description: readString(entry, "description", issues, false) ?? "", kind });
   }
   return out;
 }

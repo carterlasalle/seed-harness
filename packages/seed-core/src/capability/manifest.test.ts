@@ -106,6 +106,23 @@ test("rejects duplicate contribution ids", () => {
   );
 });
 
+test("contribution kinds default to tool and cover skills hooks mcp lsp", () => {
+  const manifest = parseCapabilityManifest({
+    ...validManifest,
+    contributions: [
+      { id: "t", description: "tool" },
+      { id: "s", description: "skill", kind: "skill" },
+      { id: "h", description: "hook", kind: "hook" },
+      { id: "m", description: "mcp", kind: "mcp" },
+      { id: "l", description: "lsp", kind: "lsp" },
+    ],
+  });
+  assert.deepEqual(manifest.contributions.map((c) => c.kind), ["tool", "skill", "hook", "mcp", "lsp"]);
+  assert.throws(
+    () => parseCapabilityManifest({ ...validManifest, contributions: [{ id: "x", kind: "wizard" }] }),
+    CapabilityManifestError,
+  );
+});
 test("rejects kind/runtime disagreement and bad permissions", () => {
   assert.throws(
     () => parseCapabilityManifest({ ...validManifest, kind: "python", runtime: "mcp" }),
