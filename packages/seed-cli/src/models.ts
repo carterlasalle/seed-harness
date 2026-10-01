@@ -5,7 +5,8 @@
 // backing state, and prompts stay model-agnostic while only profiles vary.
 // Responsibilities: load/save profile records, single-profile display.
 // Invariants: validates against schemas/model-profile.schema.json required
-// fields (model, strengths, weaknesses); seeds sane defaults on first read.
+// fields (id/provider/modelId/family/observedAt/capabilities/
+// preferredPolicyId/profileStatus); seeds sane defaults on first read.
 // Public functions/types: listModels, profileModel.
 
 import { loadModels } from "./state.ts";

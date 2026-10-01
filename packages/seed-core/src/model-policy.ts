@@ -20,11 +20,29 @@
  * GENERIC_SAFE_DEFAULTS, MIN_PROFILED_TASKS.
  */
 
+// trace:v1 id=impl.sc-model-capabilities work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export interface ModelCapabilities {
+  toolCalling: number;
+  editing: number;
+  longContext: number;
+  vision: number;
+  parallelTools: number;
+  instructionFollowing: number;
+}
+
 // trace:exempt reason=internal-detail
 export interface ModelProfile {
-  model: string;
-  strengths: string[];
-  weaknesses: string[];
+  id: string;
+  provider: string;
+  modelId: string;
+  family: string;
+  observedAt: string;
+  capabilities: ModelCapabilities;
+  preferredPolicyId: string;
+  profileStatus: "unknown" | "provisional" | "validated";
+  model?: string;
+  strengths?: string[];
+  weaknesses?: string[];
   costPerTask?: number;
   p50LatencyMs?: number;
   tasksEvaluated?: number;
@@ -65,7 +83,7 @@ export function resolveModelPolicy(model: string, profiles: readonly ModelProfil
     skillPolicy: GENERIC_SAFE_DEFAULTS.skillPolicy,
     maxToolResultChars: GENERIC_SAFE_DEFAULTS.maxToolResultChars,
   };
-  const profile = profiles.find((candidate) => candidate.model === model);
+  const profile = profiles.find((candidate) => (candidate.model ?? candidate.modelId) === model || candidate.id === model);
   if (profile === undefined) {
     return {
       ...base,

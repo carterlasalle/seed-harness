@@ -169,6 +169,8 @@ test("profiler: 12 probes, provisional vs validated, scaffolding policy", () => 
   const few = PROBE_NAMES.slice(0, 3).map((probe) => ({ probe, model: "m", success: true, latencyMs: 100, tokens: 10, costUsd: 0.01 }));
   const provisional = profileFromProbes("m", few);
   assert.equal(provisional.status, "provisional");
+  assert.equal(provisional.profileStatus, "provisional");
+  assert.equal(provisional.modelId, "m");
   assert.deepEqual(provisional.strengths, PROBE_NAMES.slice(0, 3));
   const many = PROBE_NAMES.map((probe) => ({ probe, model: "m", success: true, latencyMs: 100, tokens: 10, costUsd: 0.01 }));
   const validated = profileFromProbes("m", many);

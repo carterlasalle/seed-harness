@@ -40,6 +40,14 @@ export interface ChampionPointer {
 
 // trace:exempt reason=internal-detail
 export interface ModelProfile {
+  id: string;
+  provider: string;
+  modelId: string;
+  family: string;
+  observedAt: string;
+  capabilities: Record<"toolCalling" | "editing" | "longContext" | "vision" | "parallelTools" | "instructionFollowing", number>;
+  preferredPolicyId: string;
+  profileStatus: "unknown" | "provisional" | "validated";
   model: string;
   strengths: string[];
   weaknesses: string[];
@@ -170,6 +178,14 @@ export function recentRuns(limit: number, root?: string): RunRecord[] {
 
 const DEFAULT_MODELS: ModelProfile[] = [
   {
+    id: "default",
+    provider: "local",
+    modelId: "default",
+    family: "default",
+    observedAt: new Date(0).toISOString(),
+    capabilities: { toolCalling: 0.5, editing: 0.5, longContext: 0.5, vision: 0, parallelTools: 0.5, instructionFollowing: 0.5 },
+    preferredPolicyId: "generic-safe",
+    profileStatus: "unknown",
     model: "default",
     strengths: ["routine-coding", "tool-use"],
     weaknesses: ["novel-design"],
@@ -178,6 +194,14 @@ const DEFAULT_MODELS: ModelProfile[] = [
     tasksEvaluated: 0,
   },
   {
+    id: "fast",
+    provider: "local",
+    modelId: "fast",
+    family: "fast",
+    observedAt: new Date(0).toISOString(),
+    capabilities: { toolCalling: 0.5, editing: 0.5, longContext: 0.5, vision: 0, parallelTools: 0.5, instructionFollowing: 0.5 },
+    preferredPolicyId: "generic-safe",
+    profileStatus: "unknown",
     model: "fast",
     strengths: ["small-edits"],
     weaknesses: ["multi-file-refactor"],

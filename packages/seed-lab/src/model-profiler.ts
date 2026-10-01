@@ -24,6 +24,14 @@ export interface ProbeResult {
 
 // trace:exempt reason=internal-detail
 export interface ModelProfile {
+  id: string;
+  provider: string;
+  modelId: string;
+  family: string;
+  observedAt: string;
+  capabilities: Record<"toolCalling" | "editing" | "longContext" | "vision" | "parallelTools" | "instructionFollowing", number>;
+  preferredPolicyId: string;
+  profileStatus: "unknown" | "provisional" | "validated";
   model: string;
   strengths: string[];
   weaknesses: string[];
@@ -89,6 +97,14 @@ export function profileFromProbes(model: string, results: ProbeResult[]): ModelP
   // trace:exempt reason=internal-detail
   const costPerTask = results.reduce((n, r) => n + r.costUsd, 0) / results.length;
   return {
+    id: model,
+    provider: "unknown",
+    modelId: model,
+    family: "unknown",
+    observedAt: new Date(0).toISOString(),
+    capabilities: { toolCalling: 0, editing: 0, longContext: 0, vision: 0, parallelTools: 0, instructionFollowing: 0 },
+    preferredPolicyId: "generic-safe",
+    profileStatus: results.length >= VALIDATED_MIN_TASKS ? "validated" : "provisional",
     model,
     strengths,
     weaknesses,
@@ -98,7 +114,6 @@ export function profileFromProbes(model: string, results: ProbeResult[]): ModelP
     status: results.length >= VALIDATED_MIN_TASKS ? "validated" : "provisional",
   };
 }
-
 // trace:v1 id=impl.profiler-policy work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
 export function policyForModel(profile: ModelProfile): ModelPolicy {
   const successPrior = 1 + profile.strengths.length - profile.weaknesses.length;

@@ -7,6 +7,14 @@ import { GENERIC_SAFE_DEFAULTS, MIN_PROFILED_TASKS, resolveModelPolicy } from ".
 
 const profiles = [
   {
+    id: "measured/model",
+    provider: "test",
+    modelId: "measured/model",
+    family: "test",
+    observedAt: "2026-10-01T00:00:00.000Z",
+    capabilities: { toolCalling: 0.9, editing: 0.9, longContext: 0.5, vision: 0, parallelTools: 0.5, instructionFollowing: 0.9 },
+    preferredPolicyId: "default",
+    profileStatus: "validated" as const,
     model: "measured/model",
     strengths: ["edits"],
     weaknesses: ["long contexts"],
@@ -15,6 +23,14 @@ const profiles = [
     tasksEvaluated: 12,
   },
   {
+    id: "fresh/model",
+    provider: "test",
+    modelId: "fresh/model",
+    family: "test",
+    observedAt: "2026-10-01T00:00:00.000Z",
+    capabilities: { toolCalling: 0.5, editing: 0.5, longContext: 0.5, vision: 0, parallelTools: 0.5, instructionFollowing: 0.5 },
+    preferredPolicyId: "default",
+    profileStatus: "provisional" as const,
     model: "fresh/model",
     strengths: [],
     weaknesses: [],
