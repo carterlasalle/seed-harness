@@ -1,0 +1,21 @@
+# Seed dependency updates: grouped monthly, one PR per ecosystem.
+# Purpose: keep yarn/cargo/pip + GitHub Actions fresh without update spam.
+# Review: merge only when CI (all gates incl. eval smoke + doctor) is green.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: monthly }
+    groups: { yarn: { patterns: ["*"] } }
+  - package-ecosystem: cargo
+    directory: /
+    schedule: { interval: monthly }
+    groups: { cargo: { patterns: ["*"] } }
+  - package-ecosystem: pip
+    directory: /python/seed_evolution
+    schedule: { interval: monthly }
+    groups: { pip: { patterns: ["*"] } }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    groups: { actions: { patterns: ["*"] } }

@@ -1,4 +1,4 @@
-<!-- README: Seed v1 quickstart. Purpose: prereqs/install/config/run/test/lint/build/verify in one page. Why: single entry so every slice's commands stay real. Invariant: every command below exists and runs on a fresh checkout (task/lab/CLI runners land with their own slices; until then the echo fixture is the runnable end-to-end demo). -->
+<!-- README: Seed v1 quickstart. Purpose: prereqs/install/config/run/test/lint/build/verify in one page. Why: single entry so every slice's commands stay real. Invariant: every command below was executed during the audit; `seed` subcommands run via `yarn seed`. -->
 <!-- trace:v1 id=impl.readme work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85 -->
 # Seed v1 — self-evolving agent harness
 
@@ -21,49 +21,51 @@ docker --version
 ```sh
 corepack enable
 yarn install --immutable
+cd python/seed_evolution && uv sync --all-groups && cd ../..
+cargo build --workspace
 ```
 
 ## Config
 
 ```sh
-cp .env.example .env   # guardian URL + scratch root; edit to match your machine
+cp .env.example .env   # SEED_GUARDIAN_URL + SEED_SCRATCH_ROOT; test-only SEED_STATE_DIR stays unset
 ```
 
 ## Run
 
 ```sh
+yarn seed run "rename the account abstraction"  # champion-pinned task + echo probe, recorded to ~/.seed
+yarn seed doctor  # needs SEED_GUARDIAN_URL (see .env.example); nonzero when a check fails
+yarn seed capabilities list
+yarn seed eval smoke   # fail-then-pass oracle contract on scratch copies (2 tasks)
 echo '{"id": 1, "method": "echo", "params": {"hello": "world"}}' | python3 capabilities/fixtures/echo/server.py
-python3 scripts/seed-research-catalog.py
-node scripts/verify-boundaries.ts
 ```
 
 ## Test
 
 ```sh
-yarn test              # node --test across workspaces
-cargo test --workspace # guardian tests
-python3 -m pytest      # python tests
+yarn test                                            # 108 node:test cases across packages/*/src
+yarn typecheck                                       # tsc --noEmit per package
+cargo test --workspace                               # 19 guardian tests (invariants + roundtrip + promotion)
+uv run --project python/seed_evolution pytest python/seed_evolution  # 15 pytest cases
 ```
 
 ## Lint
 
 ```sh
-yarn lint                                # node --test (lint gate)
-cargo clippy --workspace -- -D warnings
-ruff check .
+yarn lint                                            # same 108 node:test cases (lint gate)
+cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
+uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
 ```
 
 ## Build
 
 ```sh
-yarn typecheck            # node --check over boundary gate script
-cargo build --workspace   # guardian build
+cargo build --workspace            # guardian daemon binary
 ```
 
 ## Verify
 
 ```sh
-node scripts/verify-boundaries.ts        # guardian/organism boundary gate
-python3 scripts/seed-research-catalog.py # research catalog validation
-yarn verify                               # both gates
+yarn verify   # boundary gate + research catalog validation
 ```

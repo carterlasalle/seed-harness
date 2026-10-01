@@ -1,0 +1,32 @@
+# CodeQL: runs, it is not decoration. TypeScript + Rust + Python queries on
+# push/PR weekly; the security gate fails CI when an alert fires.
+# Purpose: static security analysis over the guardian boundary and the
+# organism surface (injection, traversal, socket perms).
+name: codeql
+on:
+  "push": {}
+  "pull_request": {}
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, rust, python]
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3

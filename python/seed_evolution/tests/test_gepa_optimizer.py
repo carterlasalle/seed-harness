@@ -1,9 +1,12 @@
 """Tests for mechanism_search and the gepa CLI contract."""
 
 import json
+from pathlib import Path
 
 from seed_evolution.gepa_optimizer import ALLOWED_TARGETS, main, optimize
 from seed_evolution.mechanism_search import query_catalog, search_mechanisms
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_allowed_targets_are_prompt_shaped_only():
@@ -21,7 +24,7 @@ def test_allowed_targets_are_prompt_shaped_only():
 
 
 def test_catalog_query_finds_gepa_paper():
-    found = search_mechanisms("gepa", root="/Users/rocket/seed/research")
+    found = search_mechanisms("gepa", root=REPO_ROOT / "research")
     assert any(m.id == "gepa" for m in found)
     assert query_catalog("/nonexistent-dir") == []
 

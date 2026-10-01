@@ -48,9 +48,14 @@ test("python tool sees SEED_SCRATCH/SEED_SESSION_ID/SEED_WORKSPACE", async () =>
   }
 });
 
-test("python tool runs git status in the repo", async () => {
-  const out = await runPython({ code: "import subprocess; print(subprocess.run(['git','status','--short'],capture_output=True,text=True).returncode)", workspace: "/Users/rocket/seed" });
-  assert.equal(out.stdout.trim(), "0");
+test("python tool runs git status in a scratch repo", async () => {
+  const ws = tempDir();
+  try {
+    const out = await runPython({ code: "import subprocess; print(subprocess.run(['git','init','-q'],capture_output=True,text=True).returncode); print(subprocess.run(['git','status','--short'],capture_output=True,text=True).returncode)", workspace: ws });
+    assert.equal(out.stdout.trim().split("\n").at(-1), "0");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
 });
 
 test("python timeout fires with null exit code", async () => {
@@ -154,7 +159,7 @@ test("capability host runs the echo fixture over JSONL", async () => {
   const host = startCapabilityHost({
     command: "python3",
     args: ["capabilities/fixtures/echo/server.py"],
-    cwd: "/Users/rocket/seed",
+    cwd: process.cwd(),
     defaultTimeoutMs: 5000,
   });
   try {

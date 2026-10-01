@@ -152,9 +152,8 @@ export function runPython(options: PythonToolOptions): Promise<PythonToolResult>
   const scratchDir = options.scratchDir ?? process.env.SEED_SCRATCH ?? "";
 
   return new Promise<PythonToolResult>((runResolve) => {
-    // --no-project --no-sync keeps an ambient repo checkout (e.g. /Users/rocket/seed
-    // with a half-landed pyproject) from hijacking the interpreter.
-    // trace:exempt reason=internal-detail
+    // --no-project --no-sync keeps an ambient repo checkout with a
+    // half-landed pyproject from hijacking the interpreter.
     const child = spawn("uv", ["run", "--no-project", "--no-sync", "python", "-"], {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],

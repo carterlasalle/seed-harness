@@ -9,12 +9,14 @@
 // types mirroring python/seed_evolution/protocol.py. Invariants: every read
 // tolerates missing/corrupt files via defaults; every write creates parent
 // dirs; never touches the network; state dir overridable via SEED_STATE_DIR
-// (tests) and repo root via SEED_ROOT. Public functions/types: seedRoot,
-// stateDir, readJson, writeJson, appendJsonl, loadChampion, saveChampion,
-// loadQueue, saveQueue, recordRun, recentRuns, loadModels, saveModels,
-// saveEvalResult, listEvalResults, RunRecord, ChampionPointer, ModelProfile,
-// ExperimentSummary, EvalResultSummary.
-
+// (tests). State layout: SEED_STATE_DIR wins; explicit root arg uses
+// <root>/.seed-state (tests/CI); otherwise ~/.seed (spec section 11) so the
+// user project tree stays free of Seed runtime state.
+// Public functions/types: seedRoot, stateDir, readJson, writeJson,
+// appendJsonl, loadChampion, saveChampion, loadQueue, saveQueue, recordRun,
+// recentRuns, loadModels, saveModels, saveEvalResult, listEvalResults,
+// RunRecord, ChampionPointer, ModelProfile, ExperimentSummary,
+// EvalResultSummary.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -82,7 +84,13 @@ export function seedRoot(startDir?: string): string {
 // trace:v1 id=impl.cli-state-dir work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export function stateDir(root?: string): string {
   if (process.env.SEED_STATE_DIR) return resolve(process.env.SEED_STATE_DIR);
-  const dir = join(seedRoot(root), ".seed-state");
+  if (root) {
+    const dir = join(resolve(root), ".seed-state");
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? null;
+  const dir = home ? join(home, ".seed") : join(process.cwd(), ".seed-state");
   mkdirSync(dir, { recursive: true });
   return dir;
 }

@@ -1,24 +1,29 @@
 # Seed CI — gates every slice (REQ-SEED-EZPD6B85).
-# Purpose: one workflow running all v1 gates: TS tests, boundary gate,
-# research catalog, Rust fmt/clippy/test, ruff/pytest, eval smoke.
-# Why: promotion and merge decisions trust these gates; red CI blocks.
+# Purpose: one workflow running all v1 gates: TS tests + typecheck,
+# boundary gate, research catalog, Rust fmt/clippy/test, ruff/pytest,
+# corpus determinism + eval smoke + doctor. Why: promotion and merge
+# decisions trust these gates; red CI blocks.
 # trace:v1 id=impl.ci work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 name: ci
 
 on:
-  push: {}
-  pull_request: {}
+  "push": {}
+  "pull_request": {}
 
 jobs:
   gates:
     runs-on: ubuntu-latest
+    env:
+      SEED_GUARDIAN_URL: http://127.0.0.1:7788
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out
+        uses: actions/checkout@v4
 
       - name: Install system deps (apt)
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
 
@@ -28,8 +33,11 @@ jobs:
       - name: Install TS workspaces
         run: yarn install --immutable
 
-      - name: TS tests
+      - name: TS tests (108 node:test cases)
         run: yarn test
+
+      - name: TS typecheck (tsc --noEmit per package)
+        run: yarn typecheck
 
       - name: Boundary gate (guardian/organism split)
         run: node scripts/verify-boundaries.ts
@@ -41,20 +49,36 @@ jobs:
         run: cargo fmt --check
 
       - name: Rust clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Rust tests (guardian)
+      - name: Rust tests
         run: cargo test --workspace
 
-      - name: Install Python tools
-        run: pip install --upgrade ruff pytest
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Python sync (locked)
+        run: uv sync --locked --project python/seed_evolution
 
       - name: Ruff
-        run: ruff check .
+        run: uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
+
+      - name: Pyright
+        run: uv run --no-project --with pyright pyright python/seed_evolution
 
       - name: Pytest
-        run: python3 -m pytest
+        run: uv run --project python/seed_evolution pytest python/seed_evolution
 
-      - name: Eval smoke (echo fixture roundtrip)
-        run: >
-          echo '{"id": 1, "method": "echo", "params": {"hello": "world"}}' | python3 capabilities/fixtures/echo/server.py | python3 -c "import json,sys; assert json.load(sys.stdin)['result'] == {'hello': 'world'}, 'echo smoke failed'; print('eval smoke ok')"
+      - name: Corpus determinism (exactly 60 tasks, seed 1337)
+        run: uv run --project python/seed_evolution python scripts/generate-core-evals.py --seed 1337 --output evals/core/generated && test $(ls evals/core/generated | wc -l) -eq 60
+
+      - name: Eval smoke (fail-then-pass oracle contract)
+        run: yarn seed eval smoke
+
+      - name: Doctor (nonzero on failure)
+        run: yarn seed doctor

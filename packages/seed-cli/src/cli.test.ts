@@ -5,14 +5,16 @@
 // champion rollback preserves history, doctor returns the required shape.
 // Why it exists: acceptance requires `node --test packages/seed-cli`
 // passes, and every behavior below is consumer-visible CLI surface.
-// Invariants: every test sets SEED_STATE_DIR + SEED_ROOT to a fresh temp
-// dir; never touches the real repo state or the network.
+// Invariants: every test sets SEED_STATE_DIR to a fresh temp dir and
+// SEED_ROOT to the enclosing checkout (derived from import.meta.url, never
+// a hardcoded user path); never touches the real user state or network.
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { main, COMMANDS } from "./cli.ts";
 import { callEcho, discoverCapabilities } from "./capabilities.ts";
 import { runTask } from "./run.ts";
@@ -23,10 +25,11 @@ import { runDoctor } from "./doctor.ts";
 import { loadQueue, recentRuns } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
 
+// trace:exempt reason=unit-test
 function isolate(): string {
   const dir = mkdtempSync(join(tmpdir(), "seed-cli-test-"));
   process.env.SEED_STATE_DIR = join(dir, "state");
-  process.env.SEED_ROOT = "/Users/rocket/seed";
+  process.env.SEED_ROOT = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
   return dir;
 }
 
@@ -60,10 +63,11 @@ test("help lists all commands", async () => {
 
 test("capabilities list includes echo fixture and echo roundtrip works", () => {
   isolate();
-  const names = discoverCapabilities("/Users/rocket/seed").map((c) => c.name);
+  const root = process.env.SEED_ROOT as string;
+  const names = discoverCapabilities(root).map((c) => c.name);
   assert.ok(names.includes("fixtures/echo"));
   assert.ok(names.includes("builtin/python"));
-  assert.deepEqual(callEcho({ hello: "world" }, "/Users/rocket/seed"), { hello: "world" });
+  assert.deepEqual(callEcho({ hello: "world" }, root), { hello: "world" });
 });
 
 test("run pins champion and records the run", async () => {
@@ -109,7 +113,7 @@ test("champion rollback preserves history", () => {
 
 test("doctor returns the required check shape", async () => {
   isolate();
-  const report = await runDoctor("/Users/rocket/seed");
+  const report = await runDoctor(process.env.SEED_ROOT as string);
   const names = report.checks.map((c) => c.name);
   for (const expected of [
     "node",
@@ -168,7 +172,7 @@ test("eval compare enforces non-inferiority", () => {
 
 test("eval smoke proves fail-then-pass on scratch copies", () => {
   isolate();
-  const summary = smokeEval("/Users/rocket/seed");
+  const summary = smokeEval(process.env.SEED_ROOT as string);
   assert.equal(summary.suite, "smoke");
   assert.equal(summary.total, 2);
   assert.equal(summary.failed, 0);

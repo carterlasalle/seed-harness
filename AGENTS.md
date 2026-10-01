@@ -2682,151 +2682,148 @@ Do not modify:
 
 ## Quick repository map
 
-<!--
-Example:
-
-| Area | Path | Purpose | Local AGENTS |
-| --- | --- | --- | --- |
-| API | `apps/api/` | HTTP service | `apps/api/AGENTS.md` |
-| Web | `apps/web/` | Frontend | `apps/web/AGENTS.md` |
-| DB | `packages/db/` | Persistence | `packages/db/AGENTS.md` |
--->
-
-TBD.
+| Area | Path | Purpose |
+| --- | --- | --- |
+| Guardian (immutable) | `crates/seed-guardian/` | Rust daemon: JSON-RPC, WAL store, gates, archive, promotion |
+| Organism runtime | `packages/seed-runtime/` | Python primitive, sessions, ephemeral, telemetry, guardian client |
+| Capabilities + router | `packages/seed-core/` | Manifest registry, BM25 router (max 8), friction, scientist |
+| Lab loop | `packages/seed-lab/` | Governor, crystallizer, mutation, challenges, profiler, GEPA client |
+| CLI | `packages/seed-cli/` | `seed` commands over `~/.seed` state |
+| Evolution package | `python/seed_evolution/` | GEPA contract, splits, statistics, trace analysis (uv) |
+| Capability packages | `capabilities/` | `builtin/python`, `fixtures/echo` (JSONL stdio) |
+| Eval corpus | `evals/core/generated/` | 60 generated tasks (gitignored, regen via script) |
+| Research catalog | `research/` | harnesses/papers/mechanisms YAML (validated in CI) |
+| Prompts | `prompts/` | Task-agent parts + lab role prompts |
+| Schemas | `schemas/` | Capability/event/experiment/hypothesis/model-profile JSON |
 
 ---
 
 ## Canonical commands
 
-<!-- Use exact commands that have been run successfully. -->
-
 ### Install
 
 ```sh
-TBD
-```
-
-### Develop
-
-```sh
-TBD
+corepack enable && yarn install --immutable
+uv sync --locked --project python/seed_evolution
+cargo build --workspace
 ```
 
 ### Focused test
 
 ```sh
-TBD
+node --test packages/seed-core/src/router.test.ts
+uv run --project python/seed_evolution pytest python/seed_evolution/tests/test_dataset.py
+cargo test -p seed-guardian --test promotion_rules
 ```
 
 ### Full test
 
 ```sh
-TBD
+yarn test                       # 108 node:test cases
+uv run --project python/seed_evolution pytest python/seed_evolution  # 15 cases
+cargo test --workspace          # 19 guardian tests
 ```
 
 ### Lint
 
 ```sh
-TBD
+yarn lint
+cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
+uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
 ```
 
 ### Typecheck
 
 ```sh
-TBD
+yarn typecheck
+uv run --project python/seed_evolution --with pyright pyright python/seed_evolution
 ```
 
 ### Build
 
 ```sh
-TBD
+cargo build --workspace   # guardian daemon binary (TS ships unbuilt via node strip-types)
 ```
 
 ### Full validation / Definition-of-Done command
 
 ```sh
-TBD
+yarn test && yarn typecheck && node scripts/verify-boundaries.ts && python3 scripts/seed-research-catalog.py \
+  && cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \
+  && uv run --project python/seed_evolution pytest python/seed_evolution && yarn seed eval smoke \
+  && SEED_GUARDIAN_URL=http://127.0.0.1:7788 yarn seed doctor
 ```
 
 ---
 
 ## Runtime and toolchain
 
-<!--
-Record exact supported versions and package managers.
-
-Example:
-Python: 3.x LTS/stable
-Python package manager: uv
-Node: current project-supported LTS
-JS package manager: Yarn
--->
-
-TBD.
+Node >= 22 (have v22.22.2) via corepack yarn 4.9.2; Python >= 3.10 managed
+exclusively by uv (`python/seed_evolution/uv.lock` committed); Rust via
+Cargo workspace (`Cargo.lock` committed); Docker required for candidate
+eval sandbox. TS is stdlib-only; Python runtime is stdlib-only.
 
 ---
 
 ## Configuration
 
-<!--
-Record important configuration files, env behavior, and non-obvious defaults.
-Never put real secrets here.
--->
-
-TBD.
+`~/.seed/config.toml` (guardian socket/db/log, sandbox, eval, promotion;
+schema_version 1, missing file yields compiled defaults in
+`crates/seed-guardian/src/config.rs`). `.env.example` documents
+`SEED_GUARDIAN_URL` + `SEED_SCRATCH_ROOT` (copy to `.env`; never commit
+`.env`). Test-only `SEED_STATE_DIR` and `SEED_ROOT` isolate CLI tests.
+`SEED_SCRATCH` is set per session by `session.ts`, never hand-edited.
 
 ---
 
 ## Architecture boundaries
 
-<!--
-Record project-specific dependency direction and ownership rules.
--->
-
-TBD.
+Guardian (`crates/seed-guardian`) is immutable and owns gates/promotion;
+organism (`packages/*`, `python/seed_evolution`) is evolvable and owns the
+loop/router/capabilities/lab. Contact crosses only the 9-method agent RPC
+allowlist and the capability JSONL ABI. `node scripts/verify-boundaries.ts`
+fails CI on `seed-guardian` imports or guardian-only RPC in the organism.
+See `docs/adr/0001-guardian-organism-split.md` and `docs/SECURITY.md`.
 
 ---
 
 ## Source-of-truth files
 
-<!--
-Examples:
-- Schema X owns generated Y.
-- Never edit generated Z directly.
--->
-
-TBD.
+- `schemas/capability.schema.json` owns `capabilities/*/capability.json`.
+- `scripts/generate-core-evals.py` owns `evals/core/generated/*` (gitignored;
+  regen with `--seed 1337`, never hand-edit).
+- `research/*.yaml` own the mechanism catalog (validated by
+  `scripts/seed-research-catalog.py`).
+- `prompts/task-agent/*.md` own the composed `prompts/task-agent.md`.
+- Guardian config defaults live in `crates/seed-guardian/src/config.rs`.
 
 ---
 
 ## Domain vocabulary
 
-<!--
-Point to CONTEXT.md and record only terms that repeatedly cause mistakes.
--->
-
-TBD.
+See `CONTEXT.md`. Confusions to avoid: Champion (deployed ref) vs Candidate
+(proposal) vs Archive (kept non-champion); oracle (executable pass/fail)
+vs judge (never a promotion signal); smoke (2-task fail-then-pass
+contract) vs full eval (60 oracles).
 
 ---
 
 ## UI and design
 
-<!--
-Point to DESIGN.md. Record project-specific UI traps or visual constraints.
--->
-
-TBD.
+See `DESIGN.md`. CLI stdio only, no browser bundle; doctor output is
+`ok|FAIL name: detail` lines with nonzero exit on failure.
 
 ---
 
 ## Test topology
 
-<!--
-Record where unit/component/integration/E2E tests live and the fastest way to
-run a single test.
--->
-
-TBD.
+Co-located suites: `packages/*/src/*.test.ts` via
+`node --test "packages/*/src/**/*.test.ts"` (108 cases); single file via
+`node --test <path>`; `python/seed_evolution/tests/test_*.py` via
+`uv run --project python/seed_evolution pytest` (15 cases);
+`crates/seed-guardian/tests/*.rs` via `cargo test -p seed-guardian`
+(19: 12 invariants + 2 roundtrip + 5 promotion). Corpus: regen 60 tasks,
+`yarn seed eval smoke`, `yarn seed eval run`.
 
 ---
 
@@ -2844,148 +2841,178 @@ Line:       >= 95%
 Branch:     >= 90%
 ```
 
-<!-- Record project-approved deviations with reason. -->
+Deviation (2026-10-01, honest): no coverage tooling is wired yet, so the
+gate above is policy, not measured evidence. Suites report case counts
+(108 node:test + 15 pytest + 19 cargo), not line/branch percentages. Do
+not claim the percentages until a coverage run lands; adding the tool is
+future work, not a silent pass.
 
 ---
 
 ## Complexity budgets and receipts
 
+Tripwires, not targets. Largest files (2026-10-01): `db.rs` 462,
+`config.rs` 358, `edits.ts` 352, `rpc.rs` 333, `friction.ts` 316 lines.
+Warn at 500 lines per file, fail at 800; split only along module seams
+already in the layout (capability vs router vs lab). Largest test file:
+`router.test.ts` 92 lines, `runtime.test.ts` 188 lines.
+
+Receipt: `wc -l` over `packages/*/src`, `crates/seed-guardian/src`,
+`scripts`, `python/seed_evolution/src` on darwin arm64, 2026-10-01.
+
 ### Cyclomatic complexity
 
-TBD.
+No measured baseline yet; new branches need a rule test (friction,
+promotion, router) before merge.
 
 Receipt:
 
-TBD.
+TBD (run a complexity tool and record the command + output here).
 
 ### LOC per file
 
-TBD.
+Warn 500, fail 800 (tripwire; split along existing module seams only).
 
-Receipt:
-
-TBD.
+Receipt: largest 2026-10-01 are `db.rs` 462, `config.rs` 358,
+`edits.ts` 352, `rpc.rs` 333, `friction.ts` 316; `wc -l` command as
+above.
 
 ### ABC score
 
-TBD.
+No measured baseline yet; same rule-test-before-merge policy as
+cyclomatic complexity.
 
-Receipt:
-
-TBD.
+Receipt: TBD (record tool + output when first measured).
 
 ### CSS / JS / asset-size budgets
 
-TBD.
+Not applicable (no browser bundle; CLI stdio only).
 
 Receipt:
 
-TBD.
+N/A.
 
 ---
 
 ## Performance budgets and receipts
 
-TBD.
+- Router selection over 500 tools: best-of-5 < 10 ms in-repo
+  (`router.test.ts` "stays under 10ms"; observed ~1-3 ms warm on
+  darwin arm64, node v22.22.2, 2026-10-01; cold import adds ~10 ms
+  outside the measured section, so measure selection only).
+- Python tool: `timeout_ms` default 30000, cap 300000; stdout/stderr caps
+  256 KiB each, middle truncation keeping head+tail.
+- Guardian RPC: 1 MiB line cap; oversize/malformed lines terminate the
+  connection, never the daemon (`rpc.rs`, `main.rs`).
+- Sandbox: CPU 4, mem 8g, pids 512, network off, 600 s caller kill
+  (`config.rs`, `sandbox.rs`).
 
 ---
 
 ## Persistence and migration guarantees
 
-TBD.
+Guardian SQLite (`guardian.sqlite`, WAL + FK + NORMAL sync) migrates via
+`db.rs` `CREATE TABLE IF NOT EXISTS` (25 tables); history tables are
+append-only, never rewritten. CLI JSON state (`~/.seed`) tolerates
+missing/corrupt files via defaults (`state.ts` readJson fallbacks).
 
 ---
 
 ## Import/export and round-trip guarantees
 
-TBD.
+`protocol.py` dataclasses roundtrip EvalCase/ExperimentResult/
+PromotionDecision/FrictionLabel with strict key validation (unknown keys
+raise); TS `state.ts` shapes mirror them. Corpus task.json files are the
+export format; the generator is the importer (regen, never hand-edit).
 
 ---
 
 ## Security boundaries
 
-TBD.
+Guardian executes nothing outside the sandbox; organism imports nothing
+from the guardian (CI gate). Sessions pin champion sha; mismatched resume
+throws. State in `~/.seed`, never the user project. Secrets: none in repo;
+`.env` (untracked) carries only the guardian URL. See `docs/SECURITY.md`.
 
 ---
 
 ## Environment landmines
 
-<!--
-Record exact traps, for example:
-- command X hits production instead of local dev;
-- test must run through .venv;
-- service Y silently defaults to remote;
--->
-
-TBD.
+- `node --test <dir>` fails on node 22 (treats the dir as a module);
+  use `node --test "packages/*/src/**/*.test.ts"` or bare `yarn test`.
+- `uv run pytest` without `--project python/seed_evolution` resolves the
+  ambient env and fails on native deps; always pass `--project`.
+- `ruff`/`pyright` must run via `uv run --no-project` for the same reason.
+- `seed doctor` fails without `SEED_GUARDIAN_URL`; export it or copy
+  `.env.example` to `.env` (local only, never committed).
+- `.scc/scc.db` is 700M+ and untracked; never `git add -A` blindly without
+  checking `git status` first.
 
 ---
 
 ## Known agent anti-patterns / scars
 
-<!--
-Add specific failures after they occur.
-
-Good:
-"Do not claim frontend behavior is verified from API tests. The dashboard bug
-in #123 survived because only the endpoint was exercised."
-
-Weak:
-"Verify things carefully."
--->
-
-TBD.
+- "The quickstart commands work" without running them: root `yarn test`
+  ran bare `node --test` (no args, zero tests found) and `yarn typecheck`
+  ran `node --check` on a TS file (syntax accepted, types unchecked).
+  Fixed 2026-10-01 by pointing scripts at the real globs and `tsc -p`.
+- Committing `<repo>/.seed-state/*.json` runtime output: `seed run/smoke`
+  writes state next to the repo when env points there; fixed by defaulting
+  state to `~/.seed` (ADR-0002) and ignoring `.seed-state/`.
+- Quoting a YAML `name: …: …` step label breaks the workflow parse;
+  renamed the clippy/promotion step instead of quoting.
 
 ---
 
 ## Browser/network discoveries
 
-<!--
-Record stable official APIs or sanitized HAR-derived request knowledge when
-this materially improves repeated automation.
--->
-
-TBD.
+None. CLI stdio only; no browser automation in this repo.
 
 ---
 
 ## ADR index
 
-See:
-
-```text
-docs/adr/
-```
-
-TBD.
+See `docs/adr/`. Accepted: 0001 guardian/organism split; 0002 CLI state
+outside the repo (`~/.seed` default).
 
 ---
 
 ## Known pre-existing issues
 
-TBD.
+- No coverage tooling: the §28 percentages are policy, not measured output.
+- No license file: CHANGELOG notes "none declared yet"; needs a human
+  decision, agents must not invent one.
 
 ---
 
 ## Open questions / unclear behavior
 
-TBD.
+- Should `seed run` grow a real model turn behind the echo probe, or stay
+  a probe until the task/lab runners land? Currently a probe by design.
+- Should the 60-task corpus be committed or stay gitignored + regenerated?
+  Currently gitignored with a `.gitkeep`; CI regenerates deterministically.
 
 ---
 
 ## Durable learnings
 
-TBD.
+- Verify the exact command in the exact runner: `node --test` with no args
+  finds nothing; `node --check` is not a typecheck; CI must run the same
+  globs and gates a human would.
+- State outside the repo or it becomes content: runtime JSON next to source
+  trips trace gates and pollutes diffs; default to `~/.seed`, override per
+  test via env.
+- Small kernel first: echo probe + repair-marker oracles prove the loop
+  without faking a model; grow graders only when a real consumer needs them.
 
 ---
 
 ## Last maintenance review
 
-Date:
+Date: 2026-10-01.
 
-TBD.
-
-Reviewed:
+Reviewed: audit pass (AGENTS.md sections 0-62); fixes committed in the
+audit commit; `trace verify --changed` green at review time.
 
 </repository_memory>
 

@@ -77,7 +77,8 @@ def tool_loops(events: list[dict], repeats: int = TOOL_LOOP_REPEATS) -> list[dic
     labels = []
     run: list[dict] = []
     for event in events:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        raw_payload = event.get("payload")
+        payload: dict = raw_payload if isinstance(raw_payload, dict) else {}
         call = str(payload.get("tool", "") or payload.get("method", ""))
         failed = bool(payload.get("error") or payload.get("failed"))
         if call and failed and run and run[-1].get("call") == call:
@@ -97,9 +98,10 @@ def budget_burn(events: list[dict], cost_per_event: float = 0.01, budget: float 
     """Sessions whose accumulated cost meets the budget line."""
     totals: dict[str, float] = {}
     for event in events:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        raw_budget_payload = event.get("payload")
+        budget_payload: dict = raw_budget_payload if isinstance(raw_budget_payload, dict) else {}
         try:
-            cost = float(payload.get("cost", cost_per_event))
+            cost = float(budget_payload.get("cost", cost_per_event))
         except (TypeError, ValueError):
             cost = cost_per_event
         session = str(event.get("session", ""))
