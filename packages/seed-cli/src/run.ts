@@ -4,16 +4,18 @@
 // records it. Why it exists: REQ-SEED-EZPD6B85 needs `seed run` to be a real
 // end-to-end demo on a fresh checkout (echo fixture is the runnable path
 // until task/lab runners land). Responsibilities: pin the champion ref for
-// the session, rank capability manifests by prompt overlap (max 8), emit
-// task.start, execute the echo probe, persist the run record + task.result.
-// Invariants: never touches the network; never exceeds 8 capabilities;
-// every run is recorded even when the probe fails (ok=false). Public
-// functions/types: RunOptions, RunResult, runTask.
+// the session, rank capability manifests through the core BM25 router
+// (max 8, python pinned), emit task.start, execute the echo probe, persist
+// the run record + task.result.
+// Invariants: never touches the network; never exceeds 8 capabilities
+// (single choke point: selectTools in seed-core); every run is recorded
+// even when the probe fails (ok=false). Public functions/types: RunOptions,
+// RunResult, runTask.
 
 import { appendJsonl, loadChampion, recordRun, stateDir } from "./state.ts";
 import type { RunRecord } from "./state.ts";
 import { callEcho, discoverCapabilities } from "./capabilities.ts";
-
+import { selectTools } from "@seed/seed-core/src/router.ts";
 // trace:exempt reason=internal-detail
 export interface RunOptions {
   capabilities?: string[];
@@ -21,11 +23,6 @@ export interface RunOptions {
   root?: string;
 }
 
-// trace:exempt reason=internal-detail
-export interface RankedCapability {
-  name: string;
-  score: number;
-}
 
 // trace:v1 id=impl.cli-run-task work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function runTask(prompt: string, options: RunOptions = {}): Promise<RunRecord> {
@@ -34,31 +31,22 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
   const root = options.root;
   const champion = loadChampion(root);
   const session = options.session ?? `sess-${Date.now().toString(36)}-${process.pid}`;
-  // trace:exempt reason=unit-test
-  const tokens = new Set(trimmed.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
   // trace:exempt reason=internal-detail
-  const ranked = discoverCapabilities(root)
-    .map((manifest) => {
-      // trace:exempt reason=internal-detail
-      const haystack =
-        `${manifest.name} ${manifest.description ?? ""} ${(manifest.tools ?? []).join(" ")}`.toLowerCase();
-      // trace:exempt reason=internal-detail
-      let score = 0;
-      for (const token of tokens) {
-        if (token.length > 2 && haystack.includes(token)) score += 1;
-      }
-      // trace:exempt reason=internal-detail
-      const rankedCapability: RankedCapability = { name: manifest.name, score };
-      return rankedCapability;
-    })
-    .sort((a, b) => b.score - a.score || (a.name < b.name ? -1 : 1));
+  const cards = discoverCapabilities(root).map((manifest) => ({
+    id: manifest.name,
+    name: manifest.name,
+    description: `${manifest.description ?? ""} ${(manifest.tools ?? []).join(" ")}`,
+    capability: manifest.name,
+    languages: [] as readonly string[],
+  }));
+  // trace:exempt reason=internal-detail
+  const selected = selectTools({ task: trimmed, cards });
   // trace:exempt reason=internal-detail
   const wanted = options.capabilities?.length ? new Set(options.capabilities) : null;
   // trace:exempt reason=internal-detail
-  const picked = ranked
-    .filter((entry) => (wanted ? wanted.has(entry.name) : true))
-    .slice(0, 8)
-    .map((entry) => entry.name);
+  const picked = selected
+    .filter((entry) => (wanted ? wanted.has(entry.id) : true))
+    .map((entry) => entry.id);
   // trace:exempt reason=internal-detail
   const id = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffff).toString(16)}`;
   // trace:exempt reason=internal-detail

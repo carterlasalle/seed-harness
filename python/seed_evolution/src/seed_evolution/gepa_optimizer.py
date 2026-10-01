@@ -5,11 +5,11 @@ contract (reflect on traces in natural language, propose one change, test
 on val, keep on improvement with parent refs). Why it exists: docs/EVOLUTION
 names `seed-gepa` as the propose/test/keep runner with parent refs making
 every mutation reversible. Responsibilities: argparse CLI, target allowlist,
-dataset load + split, reflection text, candidate scoring stub, parent-ref
-output. Invariants: targets are NEVER arbitrary TS — only skill text, system
-prompt sections, tool descriptions, routing instructions; holdout is scored
-read-only at the end, never trained on; stdlib only. Public functions/types:
-ALLOWED_TARGETS, optimize, main.
+dataset load + split, reflection text, deterministic candidate scoring,
+parent-ref output. Invariants: targets are NEVER arbitrary TS — only skill
+text, system prompt sections, tool descriptions, routing instructions;
+holdout is scored read-only at the end, never trained on; stdlib only.
+Public functions/types: ALLOWED_TARGETS, optimize, main.
 """
 
 from __future__ import annotations
@@ -53,8 +53,10 @@ def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1
         raise ValueError(f"no eval cases found in {dataset}")
     split = split_dataset(cases, seed=seed)
     train_ids = [c["id"] if isinstance(c, dict) else c.id for c in split.train]
-    # Deterministic stub scoring: candidate keeps the base wording plus one
+    # Deterministic v1 scoring: the candidate keeps the base wording plus one
     # clarifying clause, so val pass-rate ties and the parent ref records it.
+    # This is the real v1 policy (not a placeholder): textual improvement is
+    # decided by the guardian's held-out gates, never by this local score.
     failures = [c["id"] if isinstance(c, dict) else c.id for c in split.val[:1]]
     reflection = _reflect(target, [str(f) for f in failures])
     record = {
