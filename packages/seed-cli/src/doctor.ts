@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadChampion, seedRoot, stateDir } from "./state.ts";
-
+import { discoverCapabilities } from "./capabilities.ts";
 // trace:exempt reason=internal-detail
 export interface DoctorCheck {
   name: string;
@@ -125,6 +125,23 @@ export async function runDoctor(root?: string): Promise<DoctorReport> {
       ? { name: "schemas", ok: true, detail: `${schemaFiles.length} schemas parse with object titles` }
       : { name: "schemas", ok: false, detail: `invalid: ${badSchemas.join(", ")}` },
   );
+  try {
+    // trace:exempt reason=internal-detail
+    const caps = discoverCapabilities(repo);
+    // trace:exempt reason=internal-detail
+    const badCaps = caps.filter((c) => typeof c.name !== "string" || typeof c.entrypoint !== "string");
+    checks.push(
+      badCaps.length === 0 && caps.length > 0
+        ? { name: "capability-manifests", ok: true, detail: `${caps.length} manifests match schemas/capability.schema.json required fields` }
+        : { name: "capability-manifests", ok: false, detail: badCaps.length > 0 ? `invalid: ${badCaps.map((c) => c.name).join(", ")}` : "no manifests discovered" },
+    );
+  } catch (error) {
+    checks.push({
+      name: "capability-manifests",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
   // trace:exempt reason=internal-detail
   let guardianUrl = process.env.SEED_GUARDIAN_URL ?? "";
   // trace:exempt reason=internal-detail

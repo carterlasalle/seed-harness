@@ -126,6 +126,7 @@ test("doctor returns the required check shape", async () => {
     "sqlite",
     "champion",
     "schemas",
+    "capability-manifests",
     "credentials",
   ]) {
     assert.ok(names.includes(expected), `missing doctor check: ${expected}`);
