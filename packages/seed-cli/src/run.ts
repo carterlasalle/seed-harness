@@ -1,22 +1,25 @@
-// seed-cli run: single-task execution sequence (pin champion, pick caps, probe, record).
+// seed-cli run: single-task execution through the champion-pinned organism.
 //
-// Purpose: `seed run` executes one task through the organism sequence and
-// records it. Why it exists: REQ-SEED-EZPD6B85 needs `seed run` to be a real
-// end-to-end demo on a fresh checkout (echo fixture is the runnable path
-// until task/lab runners land). Responsibilities: pin the champion ref for
-// the session, rank capability manifests through the core BM25 router
-// (max 8, python pinned), emit task.start, execute the echo probe, persist
-// the run record + task.result.
-// Invariants: never touches the network; never exceeds 8 capabilities
-// (single choke point: selectTools in seed-core); every run is recorded
-// even when the probe fails (ok=false). Public functions/types: RunOptions,
-// RunResult, runTask.
+// Purpose: `seed run` executes one task through runOrganismTask (hello >
+// champion pin > python turn > task.end) and records it. Why it exists:
+// REQ-SEED-EZPD6B85 needs `seed run` to exercise the real Day-1 path —
+// the python primitive with telemetry and the echo probe as the first
+// turn — instead of bypassing the organism with a direct echo call.
+// Responsibilities: build a live or fallback guardian client, run one
+// ephemeral python turn, then the echo probe, persist the run record +
+// task.result.
+// Invariants: python stays visible (organism throws otherwise); every run
+// is recorded even when the probe fails (ok=false); without a guardian
+// socket the run degrades to the local echo probe with detail marked
+// `noguardian` instead of failing the foreground task.
+// Public functions/types: RunOptions, runTask.
 
 import { appendJsonl, loadChampion, recordRun, stateDir } from "./state.ts";
 import type { RunRecord } from "./state.ts";
 import { callEcho, discoverCapabilities } from "./capabilities.ts";
 import { selectTools } from "@seed/seed-core/src/router.ts";
-// trace:exempt reason=internal-detail
+import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
+import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
 export interface RunOptions {
   capabilities?: string[];
   session?: string;
@@ -59,6 +62,29 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
     payload: { runId: id, prompt: trimmed.slice(0, 200), champion: champion.ref },
   });
   try {
+    // Day-1 turn through the real organism: one python execution with
+    // telemetry, then the echo probe as the observable completion.
+    // trace:exempt reason=internal-detail
+    let turnNote = "noguardian";
+    try {
+      // trace:exempt reason=internal-detail
+      const socketPath = `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+      const client = await connectGuardian({ socketPath, connectTimeoutMs: 2000 });
+      const organism = await runOrganismTask({
+        client,
+        workspace: process.cwd(),
+        taskBrief: trimmed,
+        sessionId: session,
+      });
+      const turn = await organism.runTurn({
+        prompt: `ephemeral: run-${id}`,
+        code: `print(${JSON.stringify(`run ${id} champion ${champion.ref}`)})`,
+      });
+      await organism.end(turn.ok ? "done" : "failed", turn.stdout.slice(0, 500));
+      turnNote = turn.ok ? "python-ok" : "python-failed";
+    } catch {
+      turnNote = "noguardian";
+    }
     // trace:exempt reason=internal-detail
     const echoed = callEcho({ prompt: trimmed, session, champion: champion.ref }, root);
     // trace:exempt reason=internal-detail
@@ -69,7 +95,7 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
       prompt: trimmed,
       capabilities: picked,
       ok: true,
-      detail: `champion=${champion.ref} caps=[${picked.join(",")}] echo=${JSON.stringify(echoed).slice(0, 120)}`,
+      detail: `champion=${champion.ref} caps=[${picked.join(",")}] ${turnNote} echo=${JSON.stringify(echoed).slice(0, 120)}`,
     };
     // trace:exempt reason=internal-detail
     recordRun(record, root);

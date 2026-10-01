@@ -77,6 +77,7 @@ test("run pins champion and records the run", async () => {
   assert.equal(record.ok, true);
   assert.equal(record.session, "test-session");
   assert.ok(record.detail.includes("champion="));
+  assert.ok(record.detail.includes("noguardian") || record.detail.includes("python-"));
   assert.equal(recentRuns(5).length, 1);
 });
 
