@@ -25,21 +25,19 @@ const profiles = [
 test("unknown models get the generic-safe policy and are not promotion-eligible", () => {
   const policy = resolveModelPolicy("mystery/model", profiles);
   assert.equal(policy.source, "generic-safe");
-  assert.equal(policy.temperature, GENERIC_SAFE_DEFAULTS.temperature);
-  assert.equal(policy.maxTokens, GENERIC_SAFE_DEFAULTS.maxTokens);
+  assert.equal(policy.modelPattern, "mystery/model");
+  assert.equal(policy.toolVisibilityLimit, GENERIC_SAFE_DEFAULTS.toolVisibilityLimit);
+  assert.equal(policy.maxToolResultChars, GENERIC_SAFE_DEFAULTS.maxToolResultChars);
   assert.equal(policy.promotionEligible, false);
-  assert.deepEqual(policy.strengths, []);
   assert.ok(policy.guidance.includes("unprofiled"));
 });
 
-test("measured profiles are adopted with their stats and become promotion-eligible", () => {
+test("measured profiles become promotion-eligible at the task threshold", () => {
   const policy = resolveModelPolicy("measured/model", profiles);
   assert.equal(policy.source, "profile");
-  assert.equal(policy.costPerTask, 0.4);
-  assert.equal(policy.p50LatencyMs, 1200);
+  assert.equal(policy.modelPattern, "measured/model");
   assert.equal(policy.tasksEvaluated, 12);
   assert.equal(policy.promotionEligible, true);
-  assert.deepEqual(policy.strengths, ["edits"]);
 });
 
 test("under-profiled models stay ineligible until MIN_PROFILED_TASKS", () => {

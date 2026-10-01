@@ -42,7 +42,7 @@ impl Default for SandboxOpts {
     // trace:exempt reason=internal-detail
     fn default() -> Self {
         Self {
-            image: "seed-candidate:latest".to_string(),
+            image: crate::config::default_image(),
             candidate_dir: String::new(),
             workspace_dir: String::new(),
             fixture_dir: String::new(),

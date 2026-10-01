@@ -1,14 +1,67 @@
 {
-  "$comment": "Seed schema. Model profiler record (spec section 85: per-model strengths/cost/latency). [trace:v1 id=impl.schemas work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN satisfies=REQ-SEED-D5V8QCMS]",
+  "$comment": "Seed schema. Model registry record (spec section 85: id/provider/modelId/family/observedAt/capabilities 0..1/preferredPolicyId/profileStatus). [trace:v1 id=impl.schemas work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-AJZXZFBN satisfies=REQ-SEED-D5V8QCMS]",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SeedModelProfile",
   "type": "object",
   "required": [
-    "model",
-    "strengths",
-    "weaknesses"
+    "id",
+    "provider",
+    "modelId",
+    "family",
+    "observedAt",
+    "capabilities",
+    "preferredPolicyId",
+    "profileStatus"
   ],
   "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modelId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "toolCalling",
+        "editing",
+        "longContext",
+        "vision",
+        "parallelTools",
+        "instructionFollowing"
+      ],
+      "properties": {
+        "toolCalling": { "type": "number", "minimum": 0, "maximum": 1 },
+        "editing": { "type": "number", "minimum": 0, "maximum": 1 },
+        "longContext": { "type": "number", "minimum": 0, "maximum": 1 },
+        "vision": { "type": "number", "minimum": 0, "maximum": 1 },
+        "parallelTools": { "type": "number", "minimum": 0, "maximum": 1 },
+        "instructionFollowing": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "preferredPolicyId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profileStatus": {
+      "type": "string",
+      "enum": ["unknown", "provisional", "validated"]
+    },
     "model": {
       "type": "string",
       "minLength": 1

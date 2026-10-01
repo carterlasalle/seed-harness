@@ -20,13 +20,40 @@ use std::path::PathBuf;
 // trace:exempt reason=internal-detail
 pub const SCHEMA_VERSION: u32 = 1;
 
-/// Full guardian configuration (all sections).
+/// Full guardian configuration (spec section 103 shape: schema_version plus
+/// evolution/foreground/capabilities/incubator/promotion/guardian/sandbox/
+/// models sections; db/eval are guardian-owned refinements).
+/// Config file keys MUST use the exact spec section 103 names: [evolution]
+/// enabled/auto_run_idle/normal_cycle_tasks/scientist_cycle_tasks/
+/// challenge_cycle_tasks/pareto_archive_limit, [foreground]
+/// inline_harness_improvement_seconds, [capabilities] visible_tool_limit/
+/// auto_crystallize, [incubator] rolling_budget_ratio/daily_cost_limit_usd/
+/// max_cpu_percent_while_foreground_active, [promotion] quality_noninferiority/
+/// critical_quality_noninferiority/meaningful_efficiency_improvement/
+/// meaningful_complexity_improvement/probation_tasks, [guardian] socket/
+/// database, [sandbox] default_network, [models] task/scientist/mutator/
+/// judge/challenge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // trace:v1 id=impl.config-record work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub struct Config {
     /// Config schema version; must equal SCHEMA_VERSION.
     #[serde(default = "default_schema_version")]
     pub schema_version: u32,
+    /// Evolution loop cadences.
+    #[serde(default)]
+    pub evolution: EvolutionSection,
+    /// Foreground inline budget.
+    #[serde(default)]
+    pub foreground: ForegroundSection,
+    /// Capability visibility + crystallization.
+    #[serde(default)]
+    pub capabilities: CapabilitiesSection,
+    /// Incubator spend/CPU budget.
+    #[serde(default)]
+    pub incubator: IncubatorSection,
+    /// Promotion and probation thresholds.
+    #[serde(default)]
+    pub promotion: PromotionSection,
     /// Daemon socket/db/logging.
     #[serde(default)]
     pub guardian: GuardianSection,
@@ -39,17 +66,22 @@ pub struct Config {
     /// Gate pipeline + corpus.
     #[serde(default)]
     pub eval: EvalSection,
-    /// Promotion and probation thresholds.
+    /// Lab model role assignments.
     #[serde(default)]
-    pub promotion: PromotionSection,
+    pub models: ModelsSection,
 }
 /// Guardian daemon section.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // trace:v1 id=impl.config-guardian-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub struct GuardianSection {
-    /// Unix socket path (0600).
-    #[serde(default = "default_socket_path")]
+    /// Unix socket path (spec section 103 key `socket`, default
+    /// `~/.seed/run/guardian.sock`, mode 0600).
+    #[serde(default = "default_socket_path", alias = "socket")]
     pub socket_path: String,
+    /// Guardian SQLite path (spec section 103 key `database`, default
+    /// `~/.seed/guardian.sqlite`).
+    #[serde(default = "default_db_path", alias = "database")]
+    pub database: String,
     /// Log level (error|warn|info|debug).
     #[serde(default = "default_log_level")]
     pub log_level: String,
@@ -64,6 +96,7 @@ impl Default for GuardianSection {
     fn default() -> Self {
         Self {
             socket_path: default_socket_path(),
+            database: default_db_path(),
             log_level: default_log_level(),
             max_message_bytes: default_max_message_bytes(),
         }
@@ -109,10 +142,9 @@ pub struct SandboxSection {
     /// PID limit per run.
     #[serde(default = "default_pids_limit")]
     pub pids_limit: u32,
-    /// Enable network (default false).
-    #[serde(default)]
+    /// Enable network (spec section 103 key `default_network`, default false).
+    #[serde(default, alias = "default_network")]
     pub network_enabled: bool,
-    /// Kill timeout in seconds.
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
 }
@@ -159,18 +191,33 @@ impl Default for EvalSection {
     }
 }
 
-/// Promotion safety section.
+/// Promotion safety section (spec section 103 names + guardian refinements).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // trace:v1 id=impl.config-promotion-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub struct PromotionSection {
-    /// Non-inferiority tolerance (default 0.01).
-    #[serde(default = "default_tolerance")]
+    /// Non-inferiority tolerance (spec: quality_noninferiority, default 0.01).
+    #[serde(default = "default_tolerance", alias = "quality_noninferiority")]
     pub tolerance: f64,
-    /// Critical-path tolerance (default 0.005).
-    #[serde(default = "default_critical_tolerance")]
+    /// Critical-path tolerance (spec: critical_quality_noninferiority, 0.005).
+    #[serde(
+        default = "default_critical_tolerance",
+        alias = "critical_quality_noninferiority"
+    )]
     pub critical_tolerance: f64,
+    /// Meaningful efficiency gain (spec: meaningful_efficiency_improvement, 0.10).
+    #[serde(
+        default = "default_efficiency_gain",
+        alias = "meaningful_efficiency_improvement"
+    )]
+    pub efficiency_gain: f64,
+    /// Meaningful complexity gain (spec: meaningful_complexity_improvement, 0.20).
+    #[serde(
+        default = "default_complexity_gain",
+        alias = "meaningful_complexity_improvement"
+    )]
+    pub complexity_gain: f64,
     /// Probation task count (default 10).
-    #[serde(default = "default_probation_tasks")]
+    #[serde(default = "default_probation_tasks", alias = "probation_tasks")]
     pub probation_tasks: u32,
     /// Strikes triggering rollback (default 2).
     #[serde(default = "default_rollback_strikes")]
@@ -180,6 +227,87 @@ pub struct PromotionSection {
     pub archive_cap: usize,
 }
 
+/// Evolution loop cadences (spec section 103).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+// trace:v1 id=impl.config-evolution-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+pub struct EvolutionSection {
+    /// Master switch for automatic evolution.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Run structural experiments only when idle.
+    #[serde(default = "default_true")]
+    pub auto_run_idle: bool,
+    /// Tasks between normal lab cycles (default 10).
+    #[serde(default = "default_normal_cycle_tasks")]
+    pub normal_cycle_tasks: u32,
+    /// Tasks between scientist cycles (default 50).
+    #[serde(default = "default_scientist_cycle_tasks")]
+    pub scientist_cycle_tasks: u32,
+    /// Tasks between challenge generations (default 20).
+    #[serde(default = "default_challenge_cycle_tasks")]
+    pub challenge_cycle_tasks: u32,
+    /// Pareto archive cap mirror (default 64).
+    #[serde(default = "default_archive_cap")]
+    pub pareto_archive_limit: usize,
+}
+
+/// Foreground inline budget (spec section 103).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+// trace:v1 id=impl.config-foreground-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+pub struct ForegroundSection {
+    /// Max harness-improvement seconds per foreground task (default 30).
+    #[serde(default = "default_inline_secs")]
+    pub inline_harness_improvement_seconds: u32,
+}
+
+/// Capability visibility + crystallization (spec section 103).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+// trace:v1 id=impl.config-capabilities-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+pub struct CapabilitiesSection {
+    /// Max visible tools (default 8, python pinned).
+    #[serde(default = "default_visible_tool_limit")]
+    pub visible_tool_limit: u32,
+    /// Crystallize repeated helpers automatically.
+    #[serde(default = "default_true")]
+    pub auto_crystallize: bool,
+}
+
+/// Incubator spend/CPU budget (spec section 103).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+// trace:v1 id=impl.config-incubator-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+pub struct IncubatorSection {
+    /// Rolling spend ratio (default 0.10).
+    #[serde(default = "default_budget_ratio")]
+    pub rolling_budget_ratio: f64,
+    /// Daily cost cap USD (default 10.0).
+    #[serde(default = "default_daily_cost_cap")]
+    pub daily_cost_limit_usd: f64,
+    /// Max CPU % while a foreground task is active (default 25).
+    #[serde(default = "default_foreground_cpu_cap")]
+    pub max_cpu_percent_while_foreground_active: u32,
+}
+
+/// Lab model role assignments (spec section 103).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+// trace:v1 id=impl.config-models-section work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+pub struct ModelsSection {
+    /// Foreground task model ("" = task model).
+    #[serde(default)]
+    pub task: String,
+    /// Scientist model override.
+    #[serde(default)]
+    pub scientist: String,
+    /// Mutator model override.
+    #[serde(default)]
+    pub mutator: String,
+    /// Judge model override.
+    #[serde(default)]
+    pub judge: String,
+    /// Challenge-generator model override.
+    #[serde(default)]
+    pub challenge: String,
+}
+
 // trace:exempt reason=internal-detail
 impl Default for PromotionSection {
     // trace:exempt reason=internal-detail
@@ -187,9 +315,59 @@ impl Default for PromotionSection {
         Self {
             tolerance: default_tolerance(),
             critical_tolerance: default_critical_tolerance(),
+            efficiency_gain: default_efficiency_gain(),
+            complexity_gain: default_complexity_gain(),
             probation_tasks: default_probation_tasks(),
             rollback_strikes: default_rollback_strikes(),
             archive_cap: default_archive_cap(),
+        }
+    }
+}
+
+// trace:exempt reason=internal-detail
+impl Default for EvolutionSection {
+    // trace:exempt reason=internal-detail
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            auto_run_idle: true,
+            normal_cycle_tasks: default_normal_cycle_tasks(),
+            scientist_cycle_tasks: default_scientist_cycle_tasks(),
+            challenge_cycle_tasks: default_challenge_cycle_tasks(),
+            pareto_archive_limit: default_archive_cap(),
+        }
+    }
+}
+
+// trace:exempt reason=internal-detail
+impl Default for ForegroundSection {
+    // trace:exempt reason=internal-detail
+    fn default() -> Self {
+        Self {
+            inline_harness_improvement_seconds: default_inline_secs(),
+        }
+    }
+}
+
+// trace:exempt reason=internal-detail
+impl Default for CapabilitiesSection {
+    // trace:exempt reason=internal-detail
+    fn default() -> Self {
+        Self {
+            visible_tool_limit: default_visible_tool_limit(),
+            auto_crystallize: true,
+        }
+    }
+}
+
+// trace:exempt reason=internal-detail
+impl Default for IncubatorSection {
+    // trace:exempt reason=internal-detail
+    fn default() -> Self {
+        Self {
+            rolling_budget_ratio: default_budget_ratio(),
+            daily_cost_limit_usd: default_daily_cost_cap(),
+            max_cpu_percent_while_foreground_active: default_foreground_cpu_cap(),
         }
     }
 }
@@ -200,11 +378,16 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
+            evolution: EvolutionSection::default(),
+            foreground: ForegroundSection::default(),
+            capabilities: CapabilitiesSection::default(),
+            incubator: IncubatorSection::default(),
+            promotion: PromotionSection::default(),
             guardian: GuardianSection::default(),
             db: DbSection::default(),
             sandbox: SandboxSection::default(),
             eval: EvalSection::default(),
-            promotion: PromotionSection::default(),
+            models: ModelsSection::default(),
         }
     }
 }
@@ -224,6 +407,7 @@ fn seed_home() -> PathBuf {
 // trace:exempt reason=internal-detail
 fn default_socket_path() -> String {
     seed_home()
+        .join("run")
         .join("guardian.sock")
         .to_string_lossy()
         .into_owned()
@@ -253,8 +437,8 @@ fn default_busy_timeout_ms() -> u32 {
 }
 
 // trace:exempt reason=internal-detail
-fn default_image() -> String {
-    "seed-candidate:latest".to_string()
+pub fn default_image() -> String {
+    "seed-eval-runner".to_string()
 }
 
 // trace:exempt reason=internal-detail
@@ -316,6 +500,61 @@ fn default_rollback_strikes() -> u32 {
 // trace:exempt reason=internal-detail
 fn default_archive_cap() -> usize {
     64
+}
+
+// trace:exempt reason=internal-detail
+fn default_true() -> bool {
+    true
+}
+
+// trace:exempt reason=internal-detail
+fn default_efficiency_gain() -> f64 {
+    0.10
+}
+
+// trace:exempt reason=internal-detail
+fn default_complexity_gain() -> f64 {
+    0.20
+}
+
+// trace:exempt reason=internal-detail
+fn default_normal_cycle_tasks() -> u32 {
+    10
+}
+
+// trace:exempt reason=internal-detail
+fn default_scientist_cycle_tasks() -> u32 {
+    50
+}
+
+// trace:exempt reason=internal-detail
+fn default_challenge_cycle_tasks() -> u32 {
+    20
+}
+
+// trace:exempt reason=internal-detail
+fn default_inline_secs() -> u32 {
+    30
+}
+
+// trace:exempt reason=internal-detail
+fn default_visible_tool_limit() -> u32 {
+    8
+}
+
+// trace:exempt reason=internal-detail
+fn default_budget_ratio() -> f64 {
+    0.10
+}
+
+// trace:exempt reason=internal-detail
+fn default_daily_cost_cap() -> f64 {
+    10.0
+}
+
+// trace:exempt reason=internal-detail
+fn default_foreground_cpu_cap() -> u32 {
+    25
 }
 
 /// Default config path: `~/.seed/config.toml`.

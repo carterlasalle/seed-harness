@@ -40,9 +40,10 @@ export const AGENT_METHODS = [
 export type AgentMethod = (typeof AGENT_METHODS)[number];
 
 export interface GuardianHello {
-  version: string;
-  schema_version: number;
-  champion_ref: string;
+  protocol_version: number;
+  champion_sha: string;
+  telemetry_schema_version: number;
+  capability_schema_version: number;
   session_id: string;
 }
 
@@ -64,29 +65,32 @@ function isAgentMethod(method: string): method is AgentMethod {
 
 // trace:v1 id=impl.rt-guardian-hello work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
 export function helloShape(value: unknown): GuardianHello {
-  if (typeof value !== "object" || value === null || !("version" in value)) {
+  if (typeof value !== "object" || value === null) {
     throw new Error("guardian.hello returned a non-object result (protocol mismatch)");
   }
   const candidate: {
-    version?: unknown;
-    schema_version?: unknown;
-    champion_ref?: unknown;
+    protocol_version?: unknown;
+    champion_sha?: unknown;
+    telemetry_schema_version?: unknown;
+    capability_schema_version?: unknown;
     session_id?: unknown;
   } = value;
   // trace:exempt reason=internal-detail
   if (
-    typeof candidate.version !== "string" ||
-    typeof candidate.schema_version !== "number" ||
-    typeof candidate.champion_ref !== "string" ||
+    candidate.protocol_version !== 1 ||
+    typeof candidate.champion_sha !== "string" ||
+    typeof candidate.telemetry_schema_version !== "number" ||
+    typeof candidate.capability_schema_version !== "number" ||
     typeof candidate.session_id !== "string" ||
     candidate.session_id.length === 0
   ) {
-    throw new Error("guardian.hello result misses version/schema_version/champion_ref/session_id (protocol mismatch)");
+    throw new Error("guardian.hello result misses protocol_version/champion_sha/telemetry_schema_version/capability_schema_version/session_id (protocol mismatch)");
   }
   return {
-    version: candidate.version,
-    schema_version: candidate.schema_version,
-    champion_ref: candidate.champion_ref,
+    protocol_version: candidate.protocol_version,
+    champion_sha: candidate.champion_sha,
+    telemetry_schema_version: candidate.telemetry_schema_version,
+    capability_schema_version: candidate.capability_schema_version,
     session_id: candidate.session_id,
   };
 }
@@ -131,9 +135,9 @@ export class GuardianClient {
     });
   }
 
-  // trace:exempt reason=internal-detail
-  async hello(params?: { session_id?: string }): Promise<GuardianHello> {
-    return helloShape(await this.call("guardian.hello", params ?? null));
+  // trace:v1 id=impl.rt-guardian-hello-call work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+  async hello(params?: { protocol_version?: number; organism_sha?: string; session_id?: string }): Promise<GuardianHello> {
+    return helloShape(await this.call("guardian.hello", { protocol_version: 1, organism_sha: "", session_id: "", ...(params ?? {}) }));
   }
 
   // trace:exempt reason=internal-detail

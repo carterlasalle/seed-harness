@@ -78,8 +78,8 @@ export async function runOrganismTask(options: OrganismOptions): Promise<Organis
   // 3 handshake > 4 champion pin > 5 python cap > 6 discover > 7 session >
   // 8 telemetry > 9 loop (turns run by the caller via runTurn).
   // trace:exempt reason=internal-detail
-  const hello = options.hello ?? (await options.client.hello(options.sessionId ? { session_id: options.sessionId } : undefined));
-  const organismSha = hello.champion_ref;
+  const hello = options.hello ?? (await options.client.hello(options.sessionId ? { protocol_version: 1, organism_sha: "", session_id: options.sessionId } : undefined));
+  const organismSha = hello.champion_sha;
   const session =
     options.session ??
     createSession({ championRef: organismSha, sessionId: hello.session_id, scratchRoot: options.scratchRoot });

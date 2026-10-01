@@ -43,6 +43,37 @@ def _reflect(target: str, failures: list[str]) -> str:
     )
 
 
+# trace:v1 id=impl.py-gepa-oracle-rate work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+def _oracle_rate(corpus: Path, ids: list[str]) -> float:
+    """Measured oracle pass rate over scratch copies; corpus is never mutated."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    if not ids:
+        return 0.0
+    passed = 0
+    for task_id in ids:
+        src = corpus / task_id
+        oracle = src / "oracle.sh"
+        if not oracle.is_file():
+            continue
+        with tempfile.TemporaryDirectory(prefix="seed-gepa-") as work:
+            mirror = Path(work) / task_id
+            shutil.copytree(src, mirror)
+            try:
+                done = subprocess.run(
+                    ["sh", str(mirror / "oracle.sh")],
+                    capture_output=True,
+                    check=False,
+                    timeout=120,
+                    cwd=mirror,
+                )
+            except (OSError, subprocess.SubprocessError):
+                continue
+            passed += 1 if done.returncode == 0 else 0
+    return passed / len(ids)
+
 # trace:v1 id=impl.py-gepa-optimize work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1337) -> dict:
     """Run one propose/test/keep cycle; returns the result record and writes it."""
@@ -53,32 +84,35 @@ def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1
         raise ValueError(f"no eval cases found in {dataset}")
     split = split_dataset(cases, seed=seed)
     train_ids = [c["id"] if isinstance(c, dict) else c.id for c in split.train]
-    # Deterministic v1 scoring: the candidate keeps the base wording plus one
-    # clarifying clause, so val pass-rate ties and the parent ref records it.
-    # This is the real v1 policy (not a placeholder): textual improvement is
-    # decided by the guardian's held-out gates, never by this local score.
-    failures = [c["id"] if isinstance(c, dict) else c.id for c in split.val[:1]]
-    reflection = _reflect(target, [str(f) for f in failures])
+    # Honest v1 scoring: run each val oracle.sh on a scratch copy so the
+    # shipped corpus stays broken; base and candidate both fail pre-repair,
+    # so val ties at the measured rate and keep requires a real improvement.
+    # Textual improvement is decided by the guardian's held-out gates, never
+    # by a hardcoded 1.0.
+    val_ids = [c["id"] if isinstance(c, dict) else c.id for c in split.val]
+    val_rate = _oracle_rate(Path(dataset), [str(i) for i in val_ids])
+    base_rate = val_rate
+    failures = [str(i) for i in val_ids[:1]] if val_ids else []
+    reflection = _reflect(target, failures)
+    kept = val_rate > base_rate
     record = {
         "target": target,
         "seed": seed,
         "train": train_ids,
-        "val": [c["id"] if isinstance(c, dict) else c.id for c in split.val],
+        "val": [str(i) for i in val_ids],
         "holdout": [c["id"] if isinstance(c, dict) else c.id for c in split.holdout],
         "holdoutScoredOnly": True,
         "reflection": reflection,
         "candidate": {"text": f"{target}: clarified clause (parent-kept)", "parent": "base"},
-        "valPassRate": 1.0,
-        "basePassRate": 1.0,
+        "valPassRate": val_rate,
+        "basePassRate": base_rate,
         "margin": MEANINGFUL_MARGIN,
-        "kept": True,
+        "kept": kept,
     }
     out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(record, indent=2) + "\n")
     return record
-
-
 # trace:v1 id=impl.py-gepa-main work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="seed-gepa", description="GEPA propose/test/keep optimizer")

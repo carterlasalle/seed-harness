@@ -77,11 +77,13 @@ test("cwd escape is rejected with budget+limit+requested", () => {
   assert.throws(() => resolveToolCwd("../../etc", "/tmp/ws"), /budget/);
 });
 
-test("hello shape validates version/schema/champion/session", () => {
-  const hello = helloShape({ version: "0.1.0", schema_version: 1, champion_ref: "abc", session_id: "sess-1" });
-  assert.equal(hello.version, "0.1.0");
+test("hello shape validates protocol/champion/telemetry/capability/session", () => {
+  const hello = helloShape({ protocol_version: 1, champion_sha: "abc", telemetry_schema_version: 1, capability_schema_version: 1, session_id: "sess-1" });
+  assert.equal(hello.protocol_version, 1);
+  assert.equal(hello.champion_sha, "abc");
   assert.equal(hello.session_id, "sess-1");
-  assert.throws(() => helloShape({ version: "0.1.0" }), /protocol mismatch/);
+  assert.throws(() => helloShape({ protocol_version: 2, champion_sha: "abc", telemetry_schema_version: 1, capability_schema_version: 1, session_id: "s" }), /protocol mismatch/);
+  assert.throws(() => helloShape({ protocol_version: 1 }), /protocol mismatch/);
   assert.throws(() => helloShape(null), /protocol mismatch/);
 });
 

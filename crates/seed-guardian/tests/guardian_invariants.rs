@@ -58,11 +58,36 @@ fn metrics() -> metrics::Metrics {
 // trace:exempt reason=unit-test
 fn i1_hello_returns_exact_shape() {
     let db = tmp_db("i1");
-    let hello = call(&db, "guardian.hello", Value::Null);
+    let missing = call(&db, "guardian.hello", Value::Null);
+    assert!(
+        missing.get("error").is_some(),
+        "protocol_version is required"
+    );
+    let wrong = call(
+        &db,
+        "guardian.hello",
+        serde_json::json!({"protocol_version": 2}),
+    );
+    assert!(
+        wrong.get("error").is_some(),
+        "protocol_version != 1 must fail"
+    );
+    let hello = call(
+        &db,
+        "guardian.hello",
+        serde_json::json!({"protocol_version": 1}),
+    );
     let r = hello.get("result").expect("result");
-    assert_eq!(r.get("version").and_then(Value::as_str), Some("0.1.0"));
-    assert_eq!(r.get("schema_version").and_then(Value::as_u64), Some(1));
-    assert!(r.get("champion_ref").and_then(Value::as_str).is_some());
+    assert_eq!(r.get("protocol_version").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        r.get("telemetry_schema_version").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        r.get("capability_schema_version").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert!(r.get("champion_sha").and_then(Value::as_str).is_some());
     assert!(!r
         .get("session_id")
         .and_then(Value::as_str)
@@ -111,7 +136,11 @@ fn i3_protocol_mismatch_terminates() {
 fn i4_tasks_pin_session_champion() {
     let db = tmp_db("i4");
     champion::set(&db, "champ-a", "baseline").unwrap();
-    let hello = call(&db, "guardian.hello", Value::Null);
+    let hello = call(
+        &db,
+        "guardian.hello",
+        serde_json::json!({"protocol_version": 1}),
+    );
     let session = hello
         .get("result")
         .and_then(|r| r.get("session_id"))
@@ -281,6 +310,10 @@ fn i11_sandbox_refuses_forbidden_mounts() {
         ..sandbox::SandboxOpts::default()
     };
     let args = sandbox::build_args(&base).expect("valid opts");
+    assert!(
+        args.iter().any(|a| a == "seed-eval-runner"),
+        "default sandbox image must be seed-eval-runner (spec section 104)"
+    );
     for flag in [
         "--network",
         "none",
@@ -315,6 +348,20 @@ fn i12_schema_version_mismatch_rejected() {
         std::env::temp_dir().join(format!("seed-inv-i12-{}-{n}.toml", std::process::id()));
     std::fs::write(&path, "schema_version = 99\n").unwrap();
     assert!(config::load_from_path(&path).is_err());
+    let spec103: PathBuf = std::env::temp_dir().join(format!(
+        "seed-inv-i12-spec103-{}-{n}.toml",
+        std::process::id()
+    ));
+    std::fs::write(
+        &spec103,
+        "schema_version = 1\n[evolution]\nenabled = true\nauto_run_idle = true\nnormal_cycle_tasks = 10\nscientist_cycle_tasks = 50\nchallenge_cycle_tasks = 20\npareto_archive_limit = 64\n[foreground]\ninline_harness_improvement_seconds = 30\n[capabilities]\nvisible_tool_limit = 8\nauto_crystallize = true\n[incubator]\nrolling_budget_ratio = 0.10\ndaily_cost_limit_usd = 10.0\nmax_cpu_percent_while_foreground_active = 25\n[promotion]\nquality_noninferiority = 0.01\ncritical_quality_noninferiority = 0.005\nmeaningful_efficiency_improvement = 0.10\nmeaningful_complexity_improvement = 0.20\nprobation_tasks = 10\n[guardian]\nsocket = \"~/.seed/run/guardian.sock\"\ndatabase = \"~/.seed/guardian.sqlite\"\n[sandbox]\ndefault_network = false\n[models]\ntask = \"\"\nscientist = \"\"\nmutator = \"\"\njudge = \"\"\nchallenge = \"\"\n",
+    )
+    .unwrap();
+    let spec = config::load_from_path(&spec103).expect("verbatim spec section 103 keys must load");
+    assert_eq!(spec.evolution.normal_cycle_tasks, 10);
+    assert_eq!(spec.promotion.tolerance, 0.01);
+    assert_eq!(spec.guardian.socket_path, "~/.seed/run/guardian.sock");
+    assert!(!spec.sandbox.network_enabled);
     let missing: PathBuf = std::env::temp_dir().join(format!(
         "seed-inv-i12-missing-{}-{n}.toml",
         std::process::id()

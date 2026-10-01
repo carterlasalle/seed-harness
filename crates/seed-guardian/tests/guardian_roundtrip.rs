@@ -153,14 +153,30 @@ fn roundtrip_hello_begin_telemetry_end() {
     let daemon = Daemon::start(tmp_dir("roundtrip"));
     let mut conn = session(&daemon.sock);
 
-    let hello = call(&mut conn, "guardian.hello", Value::Null, 1);
+    let hello = call(
+        &mut conn,
+        "guardian.hello",
+        serde_json::json!({"protocol_version": 1, "organism_sha": "", "session_id": ""}),
+        1,
+    );
     let result = hello.get("result").expect("hello result");
-    assert_eq!(result.get("version").and_then(Value::as_str), Some("0.1.0"));
     assert_eq!(
-        result.get("schema_version").and_then(Value::as_u64),
+        result.get("protocol_version").and_then(Value::as_u64),
         Some(1)
     );
-    assert_eq!(result.get("champion_ref").and_then(Value::as_str), Some(""));
+    assert_eq!(
+        result
+            .get("telemetry_schema_version")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .get("capability_schema_version")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(result.get("champion_sha").and_then(Value::as_str), Some(""));
     let session_id = result
         .get("session_id")
         .and_then(Value::as_str)
@@ -250,7 +266,12 @@ fn restart_preserves_rows() {
     let (saved_session, task_id) = {
         let daemon = Daemon::start(dir.clone());
         let mut conn = session(&daemon.sock);
-        let hello = call(&mut conn, "guardian.hello", Value::Null, 1);
+        let hello = call(
+            &mut conn,
+            "guardian.hello",
+            serde_json::json!({"protocol_version": 1, "organism_sha": "", "session_id": ""}),
+            1,
+        );
         let session = hello
             .get("result")
             .and_then(|r| r.get("session_id"))
@@ -290,7 +311,7 @@ fn restart_preserves_rows() {
     let hello = call(
         &mut conn,
         "guardian.hello",
-        serde_json::json!({"session_id": saved_session}),
+        serde_json::json!({"protocol_version": 1, "organism_sha": "", "session_id": saved_session}),
         1,
     );
     assert_eq!(

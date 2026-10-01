@@ -13,10 +13,8 @@
 // Public items: MAX_MESSAGE_BYTES, AGENT_METHODS, FORBIDDEN_METHODS,
 // HelloResult, handle_line, bind_socket, new_id.
 
-use crate::config::SCHEMA_VERSION;
 use crate::db::{Artifact, Db};
 use crate::telemetry::{self, TelemetryEvent};
-use crate::VERSION;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
@@ -61,17 +59,19 @@ struct Request {
     id: Option<Value>,
 }
 
-/// Exact `guardian.hello` result shape: daemon version, config schema,
-/// pinned champion ref, and session id.
+/// Exact `guardian.hello` result shape (spec section 15): protocol version,
+/// pinned champion sha, and telemetry/capability schema versions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // trace:v1 id=impl.rpc-hello-result work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub struct HelloResult {
-    /// Guardian daemon version.
-    pub version: String,
-    /// Accepted config schema version.
-    pub schema_version: u32,
-    /// Champion ref pinned to the session ("" when unset).
-    pub champion_ref: String,
+    /// Agent protocol version (spec section 15: 1).
+    pub protocol_version: u32,
+    /// Champion sha pinned to the session ("" when unset).
+    pub champion_sha: String,
+    /// Telemetry event schema version.
+    pub telemetry_schema_version: u32,
+    /// Capability manifest schema version.
+    pub capability_schema_version: u32,
     /// Session id (echoed when the caller supplied a known one).
     pub session_id: String,
 }
@@ -101,12 +101,13 @@ fn fail(id: &Option<Value>, code: i32, message: &str) -> String {
     serde_json::json!({"jsonrpc": "2.0", "error": {"code": code, "message": message}, "id": id.clone().unwrap_or(Value::Null)}).to_string()
 }
 
-// trace:exempt reason=internal-detail
-fn hello_value(champion_ref: &str, session_id: &str) -> Value {
+// trace:v1 id=impl.rpc-hello-value work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+fn hello_value(champion_sha: &str, session_id: &str) -> Value {
     serde_json::to_value(HelloResult {
-        version: VERSION.to_string(),
-        schema_version: SCHEMA_VERSION,
-        champion_ref: champion_ref.to_string(),
+        protocol_version: 1,
+        champion_sha: champion_sha.to_string(),
+        telemetry_schema_version: 1,
+        capability_schema_version: 1,
         session_id: session_id.to_string(),
     })
     .unwrap_or(Value::Null)
@@ -153,6 +154,13 @@ fn str_param(params: &Value, key: &str) -> Option<String> {
 
 // trace:exempt reason=internal-detail
 fn hello(db: &Db, id: &Option<Value>, params: &Value) -> String {
+    // Spec section 15: params carry protocol_version/organism_sha/session_id;
+    // any protocol_version other than 1 terminates startup (error here;
+    // the daemon closes on non-2.0 envelopes in handle_line/serve_one).
+    match params.get("protocol_version") {
+        Some(v) if v.as_u64() == Some(1) => {}
+        _ => return fail(id, -32602, "guardian.hello needs protocol_version 1"),
+    }
     let requested = str_param(params, "session_id").unwrap_or_default();
     if !requested.is_empty() {
         match db.session_champion(&requested) {
