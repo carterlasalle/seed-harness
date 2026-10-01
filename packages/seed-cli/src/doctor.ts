@@ -126,7 +126,7 @@ export async function runDoctor(root?: string): Promise<DoctorReport> {
       : {
           name: "credentials",
           ok: false,
-          detail: "SEED_GUARDIAN_URL unset; copy .env.example to .env",
+          detail: "SEED_GUARDIAN_URL unset (doctor exits 1 by design); copy .env.example to .env",
         },
   );
   return { ok: checks.every((c) => c.ok), checks };

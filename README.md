@@ -35,10 +35,9 @@ cp .env.example .env   # SEED_GUARDIAN_URL + SEED_SCRATCH_ROOT; test-only SEED_S
 
 ```sh
 yarn seed run "rename the account abstraction"  # champion-pinned task + echo probe, recorded to ~/.seed
-yarn seed doctor  # needs SEED_GUARDIAN_URL (see .env.example); nonzero when a check fails
+yarn seed doctor  # exits 1 until SEED_GUARDIAN_URL is set (see .env.example); all other checks must pass
 yarn seed capabilities list
 yarn seed eval smoke   # fail-then-pass oracle contract on scratch copies (2 tasks)
-echo '{"id": 1, "method": "echo", "params": {"hello": "world"}}' | python3 capabilities/fixtures/echo/server.py
 ```
 
 ## Test
