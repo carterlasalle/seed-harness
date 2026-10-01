@@ -11,11 +11,10 @@
   tags: [harness, agent-loop, extensions]
   problemClasses: [routine-coding, tool-use]
   mechanismSummary: |
-    Pi runs a tool-calling agent loop over an extensible tool set with session hooks and skills. Extensions observe lifecycle events (session start, tool call, turn end) and inject context. Seed's baseline pins one reviewed Pi revision (exact pin in docs/BASELINE.md) and wraps it via npm deps; the organism reuses Pi's loop shape while the guardian stays separate.
+    Pi runs a tool-calling agent loop over an extensible tool set with session hooks and skills. Extensions observe lifecycle events (session start, tool call, turn end) and inject context. Per docs/BASELINE.md Seed does NOT vendor or depend on Pi: no fork checkout, no npm dep; Pi is a mechanism-catalog entry only and Pi-shaped ideas enter solely as evaluated candidates.
   implementationIdeas:
     - Reuse Pi extension-event shape for guardian telemetry hooks
-    - Port Pi skill format for crystallized capabilities
-  hashline: sha256:3bf5dd9046a01eb4abf31cc52fb950365b752edc54d6ebd264dfc3a5de007586
+  hashline: sha256:7d3857d9e9f77c1a7271ef27b514cf0db6c6a5a86cf3ad878e745440d061a349
   snapcompact: github:earendil-works/pi@baseline-2026-10-01
 - id: oh-my-pi
   title: Oh My Pi harness (scc + tracelayer extensions)
