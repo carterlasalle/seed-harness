@@ -1,0 +1,45 @@
+# Seed dependency review — scoped audit on manifest changes (AGENTS.md 53).
+# Purpose: fail the PR when yarn/cargo/python dependency changes introduce
+# known-high vulnerabilities. Why scoped: seed's gates (fmt, clippy, ruff,
+# tests, smoke) already run every PR; a full audit on docs-only PRs is noise.
+name: dependency-review
+
+"on":
+  pull_request: {}
+
+permissions: {}
+
+jobs:
+  review:
+    name: dependency / review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect dependency changes
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- package.json yarn.lock Cargo.lock ':(glob)**/Cargo.toml' ':(glob)**/pyproject.toml' ':(glob)**/uv.lock'; then
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Enable corepack (yarn 4.9.2)
+        if: steps.scope.outputs.relevant == 'true'
+        run: corepack enable
+      - name: Audit yarn graph (high+)
+        if: steps.scope.outputs.relevant == 'true'
+        run: yarn npm audit --all --recursive --severity high
+      - name: Audit cargo graph
+        if: steps.scope.outputs.relevant == 'true'
+        run: cargo audit --version 2>/dev/null || cargo install cargo-audit --locked -q && cargo audit

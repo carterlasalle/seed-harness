@@ -22,7 +22,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84aff5c9057d99bf # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 
@@ -57,7 +57,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958ee0f5c956e # v5.4.0
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.12"
 

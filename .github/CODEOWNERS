@@ -1,0 +1,27 @@
+# Seed repository ownership
+# CODEOWNERS is always kept accurate so branch protection can require
+# owner review at any time. Solo-owner mode: no second reviewer exists,
+# so required checks (not approvals) are the merge gate.
+
+# All seed code
+* @CarterLaSalle
+
+# Guardian boundary (immutable evaluator)
+/crates/seed-guardian/ @CarterLaSalle
+
+# Evolvable organism
+/packages/ @CarterLaSalle
+/python/ @CarterLaSalle
+
+# Capability contracts
+/capabilities/ @CarterLaSalle
+/schemas/ @CarterLaSalle
+
+# CI and repo hygiene itself
+/.github/ @CarterLaSalle
+/scripts/verify-boundaries.ts @CarterLaSalle
+
+# Docs and decisions
+/docs/ @CarterLaSalle
+/CONTEXT.md @CarterLaSalle
+/DESIGN.md @CarterLaSalle

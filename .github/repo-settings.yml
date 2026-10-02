@@ -1,0 +1,69 @@
+# seed-harness repository settings (desired state, human-applied)
+#
+# Purpose: machine-readable declaration of the GitHub-side hygiene this repo
+# needs. Why it exists: AGENTS.md 54 requires description, homepage, topics,
+# labels, templates, security reporting, branch protection, required checks —
+# applied once by a human with admin, then verified by eye on every release.
+# There is no Terraform/IaC runtime; apply with `gh` commands below.
+#
+# Apply (repo admin, once; re-run after edits):
+#   gh repo edit carterlasalle/seed-harness \
+#     --description "Self-evolving coding-agent harness: immutable Rust guardian judges an evolvable TS/Python organism (Pareto promotion, friction-driven lab)." \
+#     --homepage "https://github.com/carterlasalle/seed-harness#seed-v1--self-evolving-agent-harness" \
+#     --add-topic seed --add-topic coding-agent --add-topic self-improvement \
+#     --add-topic pareto-optimization --add-topic rust --add-topic typescript
+#   gh label create bug --color B60205 --description "Something is broken" 2>/dev/null; \
+#   gh label create enhancement --color 0E8A16 --description "New capability or mechanism" 2>/dev/null; \
+#   gh label create security --color D93F0B --description "Security-sensitive, see SECURITY.md" 2>/dev/null; \
+#   gh label create guardian --color 5319E7 --description "Touches crates/seed-guardian (immutable evaluator)" 2>/dev/null; \
+#   gh label create organism --color 1D76DB --description "Touches packages or python evolution loop" 2>/dev/null; \
+#   gh label create docs --color 0075CA --description "Documentation only" 2>/dev/null
+#
+# Branch protection (main; solo-owner mode — required CHECKS gate, no second
+# reviewer exists; see launchpad-platform .github/rulesets/main.json pattern):
+#   gh api repos/carterlasalle/seed-harness/branches/main/protection -X PUT \
+#     -f required_status_checks[strict]=true \
+#     -f required_status_checks[checks][][context]='ci / gates' \
+#     -f required_status_checks[checks][][context]='CodeQL' \
+#     -f enforce_admins=true \
+#     -f required_pull_request_reviews[dismiss_stale_reviews]=true \
+#     -f required_pull_request_reviews[require_code_owner_reviews]=false \
+#     -f required_pull_request_reviews[required_approving_review_count]=0 \
+#     -f restrictions='null' \
+#     -f allow_force_pushes=false -f allow_deletions=false
+#
+# Security reporting: SECURITY.md declares GitHub-issue reporting with the
+# `security` label. Private vulnerability reporting stays DISABLED until a
+# human enables it in repo Settings; do not claim otherwise.
+description: "Self-evolving coding-agent harness: immutable Rust guardian judges an evolvable TS/Python organism (Pareto promotion, friction-driven lab)."
+homepage: "https://github.com/carterlasalle/seed-harness#seed-v1--self-evolving-agent-harness"
+topics:
+  - seed
+  - coding-agent
+  - self-improvement
+  - pareto-optimization
+  - rust
+  - typescript
+visibility: public
+default_branch: main
+labels:
+  - { name: bug, color: B60205, description: "Something is broken" }
+  - { name: enhancement, color: 0E8A16, description: "New capability or mechanism" }
+  - { name: security, color: D93F0B, description: "Security-sensitive, see SECURITY.md" }
+  - { name: guardian, color: 5319E7, description: "Touches crates/seed-guardian (immutable evaluator)" }
+  - { name: organism, color: 1D76DB, description: "Touches packages or python evolution loop" }
+  - { name: docs, color: 0075CA, description: "Documentation only" }
+branch_protection:
+  pattern: main
+  solo_owner_mode: true
+  required_status_checks: ["ci / gates", "CodeQL"]
+  strict: true
+  enforce_admins: true
+  dismiss_stale_reviews: true
+  require_code_owner_review: false
+  required_approving_review_count: 0
+  allow_force_pushes: false
+  allow_deletions: false
+security:
+  private_vulnerability_reporting: false
+  reporting: "GitHub issue labeled `security` (see SECURITY.md)"

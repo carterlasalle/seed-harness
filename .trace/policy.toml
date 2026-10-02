@@ -81,6 +81,7 @@ paths = [
   "scripts/generate-core-evals.py",
   "capabilities/fixtures/echo/server.py",
   "scripts/sweep-exemptions.py",
+  "scripts/generate-sbom.mjs",
   "packages/seed-lab/src/index.ts",
   "packages/seed-core/src/capability/index.ts",
   "Cargo.toml",
