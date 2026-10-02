@@ -56,7 +56,7 @@ class EvalCase:
             prompt=str(raw["prompt"]),
             oracle_command=str(raw["oracleCommand"]),
             timeout_ms=int(raw.get("timeoutMs", 300000)),
-            network=bool(raw.get("network", False)),
+            network=bool(raw["network"]) if "network" in raw else False,
         )
 
 

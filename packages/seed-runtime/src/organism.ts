@@ -21,6 +21,9 @@ import { GuardianClient, type GuardianHello } from "./guardian-client.ts";
 import { createSession, type SeedSession } from "./session.ts";
 import { runPython } from "./python-tool.ts";
 import { createEphemeralStore, type EphemeralStore } from "./ephemeral.ts";
+import { completeModelTurn } from "./model-client.ts";
+import type { ModelProfile } from "@seed/seed-core/src/model-policy.ts";
+import { resolveModelPolicy } from "@seed/seed-core/src/model-policy.ts";
 import {
   createTaskTelemetry,
   finishTask,
@@ -34,6 +37,26 @@ import {
 import { selectVisibleTools } from "./tool-router.ts";
 
 export const VISIBLE_TOOLS: readonly string[] = ["python"];
+
+// trace:exempt reason=internal-detail
+export interface AgentLoopTurn {
+  index: number;
+  modelText: string;
+  code: string | null;
+  stdout: string;
+  ok: boolean;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+// trace:exempt reason=internal-detail
+export interface AgentLoopOptions {
+  model?: string;
+  maxTurns?: number;
+  systemPrompt?: string;
+  skills?: { id: string; description: string }[];
+  onTurn?: (turn: AgentLoopTurn) => void;
+}
 
 export interface OrganismTurn {
   prompt: string;
@@ -61,6 +84,8 @@ export interface Organism {
   ephemeral: EphemeralStore;
   // trace:exempt reason=internal-detail
   runTurn(turn: OrganismTurn): Promise<{ stdout: string; ok: boolean }>;
+  // trace:exempt reason=internal-detail
+  runAgentLoop(options?: AgentLoopOptions): Promise<{ turns: AgentLoopTurn[]; done: boolean; summary: string }>;
   end(status: "done" | "failed" | "budget", summary: string): Promise<void>;
 }
 
@@ -130,6 +155,8 @@ export async function runOrganismTask(options: OrganismOptions): Promise<Organis
     task,
     ephemeral,
     runTurn: (turn: OrganismTurn) => runTurn(client, session, task, organismSha, options.workspace, turn, emit, ephemeral),
+    runAgentLoop: (loop?: AgentLoopOptions) =>
+      runAgentLoop(client, session, task, organismSha, options.workspace, options.taskBrief, ephemeral, emit, loop),
     end: async (status, summary) => {
       // trace:exempt reason=internal-detail
       if (ended) return;
@@ -208,4 +235,75 @@ export async function runTurn(
     });
   }
   return { stdout: result.stdout, ok: call.ok };
+}
+
+// trace:v1 id=impl.rt-agent-loop work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+export async function runAgentLoop(
+  client: GuardianClient,
+  session: SeedSession,
+  task: TaskTelemetry,
+  organismSha: string,
+  workspace: string,
+  taskBrief: string,
+  ephemeral: EphemeralStore,
+  emit: TelemetrySink,
+  options?: AgentLoopOptions,
+): Promise<{ turns: AgentLoopTurn[]; done: boolean; summary: string }> {
+  // trace:exempt reason=internal-detail
+  const maxTurns = Math.max(1, Math.min(options?.maxTurns ?? 12, 24));
+  // trace:exempt reason=internal-detail
+  const model = options?.model ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4";
+  // trace:exempt reason=internal-detail
+  const policy = resolveModelPolicy(model, [] as readonly ModelProfile[]);
+  // trace:exempt reason=internal-detail
+  const skillLine = options?.skills?.length
+    ? `Skills (metadata only; full content loads on selection): ${options.skills.map((s) => `${s.id}: ${s.description}`).join(" | ").slice(0, 1000)}`
+    : "Skills: none selected.";
+  // trace:exempt reason=internal-detail
+  const system = [
+    options?.systemPrompt ?? "You are the Seed task agent: solve the task with the python tool. Be concise; act, observe, iterate.",
+    `Task: ${taskBrief}`,
+    `Workspace: ${workspace}. Scratch: ${session.scratchDir}. Use $SEED_SCRATCH for throwaway helpers.`,
+    `Policy: at most ${policy.toolVisibilityLimit} tools visible; python is your primitive; tool results over ${policy.maxToolResultChars} chars are truncated.`,
+    skillLine,
+    "When the task is complete, reply with DONE: <one-line summary> and no tool call.",
+  ].join("\n");
+  // trace:exempt reason=internal-detail
+  const history: { role: "user" | "assistant" | "tool"; content: string; tool_call_id?: string }[] = [
+    { role: "user", content: taskBrief },
+  ];
+  // trace:exempt reason=internal-detail
+  const turns: AgentLoopTurn[] = [];
+  // trace:exempt reason=internal-detail
+  let done = false;
+  // trace:exempt reason=internal-detail
+  let summary = "";
+  for (let index = 0; index < maxTurns && !done; index += 1) {
+    // trace:exempt reason=internal-detail
+    const turn = await completeModelTurn({ model, system, messages: history });
+    // trace:exempt reason=internal-detail
+    emit(toEvent(task, "model.request", { model, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens }));
+    if (!turn.toolCall) {
+      // trace:exempt reason=internal-detail
+      const match = /DONE:\s*(.+)/.exec(turn.text);
+      done = match !== null || turn.text.trim().length > 0;
+      summary = (match?.[1] ?? turn.text).slice(0, 2000);
+      history.push({ role: "assistant", content: turn.text });
+      turns.push({ index, modelText: turn.text, code: null, stdout: "", ok: true, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens });
+      break;
+    }
+    // trace:exempt reason=internal-detail
+    const out = await runTurn(client, session, task, organismSha, workspace, {
+      prompt: `agent-turn-${index}: ${turn.text.slice(0, 120)}`,
+      code: turn.toolCall.code,
+      timeoutMs: turn.toolCall.timeout_ms,
+      evidence: "organism",
+    }, emit, ephemeral);
+    history.push({ role: "assistant", content: turn.text });
+    history.push({ role: "tool", content: out.stdout.slice(0, policy.maxToolResultChars), tool_call_id: `turn-${index}` });
+    turns.push({ index, modelText: turn.text, code: turn.toolCall.code, stdout: out.stdout, ok: out.ok, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens });
+    // trace:exempt reason=internal-detail
+    options?.onTurn?.(turns[turns.length - 1] as AgentLoopTurn);
+  }
+  return { turns, done, summary };
 }

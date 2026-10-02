@@ -56,7 +56,7 @@ def load_cases(generated_dir: str | Path) -> list[dict]:
     for child in sorted(root.iterdir()):
         manifest = child / "task.json"
         if child.is_dir() and manifest.is_file():
-            cases.append(json.loads(manifest.read_text()))
+            cases.append(json.loads(manifest.read_text(encoding="utf-8")))
     cases.sort(key=lambda c: str(c.get("id", "")))
     return cases
 
@@ -66,11 +66,15 @@ def save_split(split: Split, path: str | Path) -> None:
     """Write split id lists as JSON."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    ids = lambda items: [c["id"] if isinstance(c, dict) else c.id for c in items]
+    # trace:exempt reason=internal-detail
+    def ids(items):
+        return [c["id"] if isinstance(c, dict) else c.id for c in items]
+
     out.write_text(
         json.dumps(
             {"train": ids(split.train), "val": ids(split.val), "holdout": ids(split.holdout)},
             indent=2,
         )
-        + "\n"
+        + "\n",
+        encoding="utf-8",
     )

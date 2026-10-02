@@ -89,7 +89,7 @@ def parse_flow_list(value: str) -> list[str]:
             buf += ch
             if ch == quote:
                 quote = None
-        elif ch in ("\"", "'"):
+        elif ch in {"\"", "'"}:
             quote, buf = ch, buf + ch
         elif ch == "," and depth == 0:
             items.append(unquote(buf))
@@ -135,7 +135,7 @@ def parse_catalog(text: str) -> list[dict]:
             k, v = k.strip(), v.strip()
             if v == "|":
                 key, block, items = k, [], None
-            elif v == "":
+            elif not v:
                 current[k] = []
                 key, items = k, current[k]
             elif v.startswith("[") and v.endswith("]"):
@@ -156,7 +156,7 @@ def parse_catalog(text: str) -> list[dict]:
 def check_file(path: Path) -> list[str]:
     errors: list[str] = []
     try:
-        entries = parse_catalog(path.read_text())
+        entries = parse_catalog(path.read_text(encoding="utf-8"))
     except ValueError as exc:
         return [f"{path}: {exc}"]
     if not entries:
@@ -204,7 +204,8 @@ def main(argv: list[str]) -> int:
         if file_errors:
             errors.extend(file_errors)
         else:
-            print(f"{path.name}: {len(parse_catalog(path.read_text()))} entries ok")
+            count = len(parse_catalog(path.read_text(encoding="utf-8")))
+            print(f"{path.name}: {count} entries ok")
     for err in errors:
         print(err, file=sys.stderr)
     if checked == 0:

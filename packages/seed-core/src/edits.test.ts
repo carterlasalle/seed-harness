@@ -10,7 +10,15 @@ const original = "line one\nline two\nline three";
 test("detectEditFormat classifies the three formats", () => {
   assert.equal(detectEditFormat("--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b"), "unified-diff");
   assert.equal(detectEditFormat("<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE"), "search-replace");
+  assert.equal(detectEditFormat("@@line 2 @@\nnew two"), "hashline");
   assert.equal(detectEditFormat("just file content\n"), "full-file");
+});
+
+test("hashline replaces one addressed line and rejects out-of-range", () => {
+  const operation = parseEdit("@@line 2 @@\nline two changed");
+  assert.equal(applyEdit(original, operation), "line one\nline two changed\nline three");
+  const bad = parseEdit("@@line 9 @@\nx");
+  assert.throws(() => applyEdit(original, bad), (error: unknown) => error instanceof EditError && /beyond/.test(error.message));
 });
 
 test("full-file replaces the file and strips a surrounding fence", () => {

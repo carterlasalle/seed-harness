@@ -15,4 +15,5 @@ export * from "./guardian-client.ts";
 export * from "./ephemeral.ts";
 export * from "./capability-host.ts";
 export * from "./tool-router.ts";
+export * from "./model-client.ts";
 export * from "./organism.ts";

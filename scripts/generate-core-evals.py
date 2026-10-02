@@ -59,29 +59,109 @@ def build_task(category: str, index: int, rng: random.Random) -> dict:
 
 
 # trace:v1 id=impl.generate-core-evals-oracle work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+def fixture_files(task: dict) -> dict[str, str]:
+    """Per-category broken fixture: real files the agent must repair with python."""
+    category = task["category"]
+    if category == "single-edit":
+        return {
+            "pager.py": (
+                "PAGE_SIZE = 10\n\n"
+                "def last_page(total):\n"
+                "    return total // PAGE_SIZE  # BUG: off-by-one, drops the last partial page\n"
+            ),
+            "test_pager.py": (
+                "from pager import last_page\n\n"
+                "assert last_page(10) == 1, 'exact pages'\n"
+                "assert last_page(11) == 2, 'partial page counts'\n"
+                "assert last_page(0) == 0, 'empty'\n"
+                "print('pager ok')\n"
+            ),
+        }
+    if category == "cross-file":
+        return {
+            "symbols.py": "def fetch_user_v2(uid):\n    return {'id': uid}\n",
+            "caller_a.py": "from symbols import fetch_user\n\nprint(fetch_user(1))\n",
+            "caller_b.py": "from symbols import fetch_user\n\nprint(fetch_user(2))\n",
+        }
+    if category == "test-fix":
+        return {
+            "retry.py": (
+                "def run_once(fail_times, state):\n"
+                "    state['n'] += 1\n"
+                "    if state['n'] <= fail_times:\n"
+                "        raise RuntimeError('flaky')\n"
+                "    return 'ok'\n\n"
+                "def run_with_retry(fail_times):\n"
+                "    state = {'n': 0}\n"
+                "    return run_once(fail_times, state)  # BUG: never retries\n"
+            ),
+            "test_retry.py": (
+                "from retry import run_with_retry\n\n"
+                "assert run_with_retry(2) == 'ok', 'must survive 2 flakes'\n"
+                "print('retry ok')\n"
+            ),
+        }
+    if category == "feature":
+        return {
+            "cli.py": (
+                "import sys\n\n"
+                "def main(argv):\n"
+                "    out = ['usage: export']\n"
+                "    if '--csv' in argv:\n"
+                "        out.append('format=csv')  # BUG: help never advertises --csv\n"
+                "    return '\\n'.join(out) + '\\n'\n\n"
+                "if __name__ == '__main__':\n"
+                "    sys.stdout.write(main(sys.argv[1:]))\n"
+            ),
+            "test_cli.py": (
+                "import subprocess, sys\n\n"
+                "out = subprocess.run([sys.executable, 'cli.py', '--help'], capture_output=True, text=True).stdout\n"
+                "assert '--csv' in out, 'help must advertise --csv'\n"
+                "print('cli ok')\n"
+            ),
+        }
+    if category == "config":
+        return {
+            "package.json": '{ "name": "demo", "scripts": { "oops": "nope" } }\n',
+            "commands.txt": "build\ntest\n",
+        }
+    # navigation: report the definition path of TARGET_SYMBOL
+    return {
+        "pkg/__init__.py": "",
+        "pkg/core.py": "def buried_symbol_definition():\n    return 42\n",
+        "pkg/util.py": "from .core import buried_symbol_definition\n\nVALUE = buried_symbol_definition()\n",
+        "TARGET_SYMBOL": "buried_symbol_definition\n",
+    }
+
+
+# trace:v1 id=impl.generate-core-evals-oracle2 work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def oracle_script(task: dict) -> str:
-    """Executable oracle: self-contained positive/negative check of the fixture repair."""
+    """Executable oracle: per-category check that fails broken, passes repaired."""
+    tid = task["id"]
+    bodies = {
+        "single-edit": 'python3 test_pager.py',
+        "cross-file": (
+            'python3 -c "import caller_a, caller_b"'
+        ),
+        "test-fix": 'python3 test_retry.py',
+        "feature": 'python3 test_cli.py',
+        "config": (
+            'python3 -c "import json; m=json.load(open(\'package.json\')); '
+            'cmds=open(\'commands.txt\').read().split(); '
+            'assert all(c in m.get(\'scripts\',{}) for c in cmds), \'scripts missing\'"'
+        ),
+        "navigation": (
+            'if ! test -f answer.txt; then echo "no answer.txt yet" >&2; exit 1; fi; grep -q "pkg/core.py" answer.txt && grep -q "buried_symbol_definition" answer.txt'
+        ),
+    }
+    body = bodies[task["category"]]
     return f"""#!/bin/sh
-# oracle for {task["id"]}: fails on the broken fixture, passes after repair.
-# The fixture ships broken: target.txt contains BROKEN. A correct repair
-# replaces it with FIXED (the task prompt describes the defect class).
+# oracle for {tid}: fails on the broken fixture, passes after repair.
 # Nothing outside this directory is read or written.
 set -eu
-dir=$(dirname "$0")
-target="$dir/target.txt"
-if [ ! -f "$target" ]; then
-  echo "missing target.txt for {task["id"]}" >&2
-  exit 1
-fi
-if grep -q "BROKEN" "$target"; then
-  echo "defect still present in {task["id"]}" >&2
-  exit 1
-fi
-if ! grep -q "FIXED" "$target"; then
-  echo "repair marker FIXED not found for {task["id"]}" >&2
-  exit 1
-fi
-echo "oracle ok {task["id"]}"
+cd "$(dirname "$0")"
+{body}
+echo "oracle ok {tid}"
 """
 
 
@@ -100,7 +180,7 @@ def generate(seed: int, output: Path) -> list[Path]:
                 "id": task["id"],
                 "category": task["category"],
                 "repoFixture": "echo",
-                "prompt": task["prompt"],
+                "prompt": task["prompt"] + " Work in the task directory; verify with ./oracle.sh before finishing.",
                 "oracleCommand": "oracle.sh",
                 "timeoutMs": TIMEOUT_MS,
                 "network": False,
@@ -109,6 +189,10 @@ def generate(seed: int, output: Path) -> list[Path]:
             oracle_path = task_dir / "oracle.sh"
             oracle_path.write_text(oracle_script(task))
             oracle_path.chmod(oracle_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            for name, content in fixture_files(task).items():
+                dest = task_dir / name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content)
             (task_dir / "target.txt").write_text(f"BROKEN {task['id']}\n")
             written.append(task_dir / "task.json")
     return written

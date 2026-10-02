@@ -13,8 +13,8 @@ import sys
 
 
 def serve(stdin=sys.stdin, stdout=sys.stdout):
-    for line in stdin:
-        line = line.strip()
+    for raw in stdin:
+        line = raw.strip()
         if not line:
             continue
         try:

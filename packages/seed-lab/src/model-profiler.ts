@@ -123,3 +123,17 @@ export function policyForModel(profile: ModelProfile): ModelPolicy {
   }
   return { model: profile.model, weight, scaffolding: "keep", reason: "provisional-or-cheap" };
 }
+
+// trace:v1 id=impl.profiler-run work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export async function runModelProbes(
+  model: string,
+  runProbe: (probe: string, model: string) => Promise<Omit<ProbeResult, "probe" | "model">>,
+): Promise<{ profile: ModelProfile; policy: ModelPolicy }> {
+  const results: ProbeResult[] = [];
+  for (const probe of PROBE_NAMES) {
+    const outcome = await runProbe(probe, model);
+    results.push({ probe, model, ...outcome });
+  }
+  const profile = profileFromProbes(model, results);
+  return { profile, policy: policyForModel(profile) };
+}

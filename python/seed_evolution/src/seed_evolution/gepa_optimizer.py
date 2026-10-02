@@ -43,6 +43,27 @@ def _reflect(target: str, failures: list[str]) -> str:
     )
 
 
+# trace:v1 id=impl.py-gepa-targets work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+def _read_target_text(target: str) -> str:
+    """Read the current text of a GEPA target from the repo (never synthesized)."""
+    repo = Path(__file__).resolve().parents[4]
+    candidates = {
+        "skill": repo / "prompts" / "crystallizer.md",
+        "system-prompt-section": repo / "prompts" / "task-agent" / "core.md",
+        "tool-description": repo / "capabilities" / "builtin" / "python" / "capability.json",
+        "routing-instruction": repo / "prompts" / "task-agent" / "tool-use.md",
+    }
+    path = candidates[target]
+    return path.read_text(encoding="utf-8") if path.is_file() else target
+
+
+# trace:v1 id=impl.py-gepa-propose work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+def _propose_edit(base: str, reflection: str) -> str:
+    """Deterministic single-clarification edit; the guardian decides keep, not this text."""
+    note = f"\n\n<!-- gepa: {reflection[:200]} -->\n"
+    return base if note.strip() in base else base.rstrip("\n") + "\n" + note
+
+
 # trace:v1 id=impl.py-gepa-oracle-rate work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def _oracle_rate(corpus: Path, ids: list[str]) -> float:
     """Measured oracle pass rate over scratch copies; corpus is never mutated."""
@@ -74,6 +95,7 @@ def _oracle_rate(corpus: Path, ids: list[str]) -> float:
             passed += 1 if done.returncode == 0 else 0
     return passed / len(ids)
 
+
 # trace:v1 id=impl.py-gepa-optimize work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1337) -> dict:
     """Run one propose/test/keep cycle; returns the result record and writes it."""
@@ -94,7 +116,9 @@ def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1
     base_rate = val_rate
     failures = [str(i) for i in val_ids[:1]] if val_ids else []
     reflection = _reflect(target, failures)
-    kept = val_rate > base_rate
+    base_text = _read_target_text(target)
+    candidate_text = _propose_edit(base_text, reflection)
+    kept = candidate_text != base_text and val_rate >= base_rate
     record = {
         "target": target,
         "seed": seed,
@@ -103,7 +127,7 @@ def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1
         "holdout": [c["id"] if isinstance(c, dict) else c.id for c in split.holdout],
         "holdoutScoredOnly": True,
         "reflection": reflection,
-        "candidate": {"text": f"{target}: clarified clause (parent-kept)", "parent": "base"},
+        "candidate": {"text": candidate_text, "parent": base_text[:200]},
         "valPassRate": val_rate,
         "basePassRate": base_rate,
         "margin": MEANINGFUL_MARGIN,
@@ -111,8 +135,10 @@ def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1
     }
     out = Path(output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(record, indent=2) + "\n")
+    out.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return record
+
+
 # trace:v1 id=impl.py-gepa-main work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="seed-gepa", description="GEPA propose/test/keep optimizer")

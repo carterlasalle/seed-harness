@@ -16,15 +16,101 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { indexEvalResult, saveEvalResult, seedRoot } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
+import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
+import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
 
 export interface EvalRunOptions {
   limit?: number;
   root?: string;
   suite?: string;
+  model?: string;
+  maxTurns?: number;
+  holdout?: boolean;
+  replay?: boolean;
+  crossModel?: string[];
+}
+
+// trace:exempt reason=internal-detail
+function defaultSocketPath(): string {
+  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+}
+
+// trace:v1 id=impl.cli-eval-repair work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+function applyReferenceRepair(dir: string): boolean {
+  if (existsSync(join(dir, "pager.py"))) {
+    const pager = join(dir, "pager.py");
+    writeFileSync(pager, readFileSync(pager, "utf8").replace("return total // PAGE_SIZE", "return (total + PAGE_SIZE - 1) // PAGE_SIZE"));
+    return true;
+  }
+  if (existsSync(join(dir, "symbols.py"))) {
+    writeFileSync(join(dir, "symbols.py"), "def fetch_user(uid):\n    return {'id': uid}\n");
+    return true;
+  }
+  if (existsSync(join(dir, "retry.py"))) {
+    const retry = join(dir, "retry.py");
+    writeFileSync(retry, readFileSync(retry, "utf8").replace("return run_once(fail_times, state)", "for _ in range(fail_times + 1):\n        try:\n            return run_once(fail_times, state)\n        except RuntimeError:\n            continue\n    raise RuntimeError('flaky')"));
+    return true;
+  }
+  if (existsSync(join(dir, "cli.py"))) {
+    const cli = join(dir, "cli.py");
+    writeFileSync(cli, readFileSync(cli, "utf8").replace("out = ['usage: export']", "out = ['usage: export [--csv]']"));
+    return true;
+  }
+  if (existsSync(join(dir, "package.json")) && existsSync(join(dir, "commands.txt"))) {
+    const pkgPath = join(dir, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { scripts?: Record<string, string> };
+    const cmds = readFileSync(join(dir, "commands.txt"), "utf8").split(/\s+/).filter(Boolean);
+    pkg.scripts = Object.fromEntries(cmds.map((c) => [c, `echo ${c}`]));
+    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+    return true;
+  }
+  if (existsSync(join(dir, "TARGET_SYMBOL"))) {
+    const target = readFileSync(join(dir, "TARGET_SYMBOL"), "utf8").trim().split(/\s+/).filter(Boolean);
+    writeFileSync(join(dir, "answer.txt"), `symbol ${target[0] ?? "buried_symbol_definition"} defined at pkg/core.py\n`);
+    return true;
+  }
+  if (!existsSync(join(dir, "target.txt"))) return false;
+  writeFileSync(join(dir, "target.txt"), readFileSync(join(dir, "target.txt"), "utf8").replace("BROKEN", "FIXED"));
+  return true;
+}
+
+
+// trace:v1 id=impl.cli-eval-case work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export async function runEvalCase(dir: string, options: { model?: string; maxTurns?: number } = {}): Promise<{ passed: boolean; detail: string }> {
+  const manifest = JSON.parse(readFileSync(join(dir, "task.json"), "utf8")) as {
+    prompt?: string;
+    oracleCommand?: string;
+    timeoutMs?: number;
+  };
+  // trace:exempt reason=internal-detail
+  const oracle = typeof manifest.oracleCommand === "string" && manifest.oracleCommand ? manifest.oracleCommand : "oracle.sh";
+  // trace:exempt reason=internal-detail
+  const timeoutMs = typeof manifest.timeoutMs === "number" && manifest.timeoutMs > 0 ? Math.min(manifest.timeoutMs, 300000) : 300000;
+  // trace:exempt reason=internal-detail
+  const work = mkdtempSync(join(tmpdir(), "seed-eval-"));
+  try {
+    cpSync(dir, work, { recursive: true });
+    // trace:exempt reason=internal-detail
+    const client = await connectGuardian({ socketPath: defaultSocketPath(), connectTimeoutMs: 5000 });
+    // trace:exempt reason=internal-detail
+    const organism = await runOrganismTask({ client, workspace: work, taskBrief: manifest.prompt ?? dir, sessionId: `eval-${Date.now().toString(36)}` });
+    // trace:exempt reason=internal-detail
+    const loop = await organism.runAgentLoop({ model: options.model, maxTurns: options.maxTurns ?? 12 });
+    await organism.end(loop.done && loop.turns.length > 0 ? "done" : "failed", loop.summary.slice(0, 500));
+    client.close();
+    // trace:exempt reason=internal-detail
+    const child = spawnSync("sh", [join(work, oracle)], { encoding: "utf8", timeout: timeoutMs, cwd: work });
+    if (child.error || child.status !== 0) {
+      return { passed: false, detail: `agent ran ${loop.turns.length} turns; oracle failed${child.error ? ` (${child.error.message})` : ` (exit ${child.status})`}` };
+    }
+    return { passed: true, detail: `agent ran ${loop.turns.length} turns; oracle passed` };
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 }
 
 // trace:v1 id=impl.cli-eval-run work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
-export function runEval(options: EvalRunOptions = {}): EvalResultSummary {
+export async function runEval(options: EvalRunOptions = {}): Promise<EvalResultSummary> {
   const root = options.root;
   const generated = join(seedRoot(root), "evals", "core", "generated");
   let dirs: string[] = [];
@@ -37,46 +123,34 @@ export function runEval(options: EvalRunOptions = {}): EvalResultSummary {
     dirs = [];
   }
   // trace:exempt reason=internal-detail
+  if (options.holdout) dirs = dirs.filter((_, i) => i % 5 === 4);
+  // trace:exempt reason=internal-detail
   if (options.limit) dirs = dirs.slice(0, Math.max(1, options.limit));
+  // trace:exempt reason=internal-detail
+  const models = options.crossModel?.length ? options.crossModel : [options.model ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4"];
+  // trace:exempt reason=internal-detail
   const failures: string[] = [];
+  // trace:exempt reason=internal-detail
   let passed = 0;
-  for (const dir of dirs) {
-    const manifestPath = join(generated, dir, "task.json");
-    if (!existsSync(manifestPath)) {
-      failures.push(`${dir}: missing task.json`);
-      continue;
-    }
-    let oracle = "oracle.sh";
-    let timeoutMs = 300000;
-    try {
-      // trace:exempt reason=internal-detail
-      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-        oracleCommand?: string;
-        timeoutMs?: number;
-      };
-      if (typeof manifest.oracleCommand === "string" && manifest.oracleCommand) {
-        oracle = manifest.oracleCommand;
+  for (const model of models) {
+    for (const dir of dirs) {
+      const manifestPath = join(generated, dir, "task.json");
+      if (!existsSync(manifestPath)) {
+        failures.push(`${dir}@${model}: missing task.json`);
+        continue;
       }
-      // trace:exempt reason=internal-detail
-      if (typeof manifest.timeoutMs === "number" && manifest.timeoutMs > 0) {
-        timeoutMs = Math.min(manifest.timeoutMs, 300000);
+      try {
+        // trace:exempt reason=internal-detail
+        const result = await runEvalCase(join(generated, dir), { model, maxTurns: options.maxTurns });
+        if (result.passed) passed += 1;
+        else failures.push(`${dir}@${model}: ${result.detail}`);
+      } catch (error) {
+        failures.push(`${dir}@${model}: ${error instanceof Error ? error.message : String(error)}`);
       }
-    } catch {
-      failures.push(`${dir}: unreadable task.json`);
-      continue;
-    }
-    // trace:exempt reason=internal-detail
-    const child = spawnSync("sh", [join(generated, dir, oracle)], {
-      encoding: "utf8",
-      timeout: timeoutMs,
-      cwd: join(generated, dir),
-    });
-    if (child.error || child.status !== 0) {
-      failures.push(`${dir}: oracle failed${child.error ? ` (${child.error.message})` : ` (exit ${child.status})`}`);
-    } else {
-      passed += 1;
     }
   }
+  // trace:exempt reason=internal-detail
+  const total = dirs.length * models.length;
   // trace:exempt reason=internal-detail
   const id =
     options.suite === "smoke"
@@ -86,7 +160,7 @@ export function runEval(options: EvalRunOptions = {}): EvalResultSummary {
     id,
     at: new Date().toISOString(),
     suite: options.suite ?? "core",
-    total: dirs.length,
+    total,
     passed,
     failed: failures.length,
     failures,
@@ -105,11 +179,12 @@ export function smokeEval(root?: string): EvalResultSummary {
   const seed = seedRoot(root);
   const generated = join(seed, "evals", "core", "generated");
   // trace:exempt reason=internal-detail
-  const dirs = readdirSync(generated, { withFileTypes: true })
+  const candidates = readdirSync(generated, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
-    .sort()
-    .slice(0, 2);
+    .sort();
+  const withRepair = candidates.filter((d) => existsSync(join(generated, d, "pager.py")) || existsSync(join(generated, d, "symbols.py")) || existsSync(join(generated, d, "target.txt")));
+  const dirs = (withRepair.length >= 2 ? withRepair : candidates).slice(0, 2);
   // trace:exempt reason=internal-detail
   const failures: string[] = [];
   // trace:exempt reason=internal-detail
@@ -127,10 +202,11 @@ export function smokeEval(root?: string): EvalResultSummary {
         continue;
       }
       // trace:exempt reason=internal-detail
-      const target = join(work, dir, "target.txt");
-      // trace:exempt reason=internal-detail
-      const broken = readFileSync(target, "utf8");
-      writeFileSync(target, broken.replace("BROKEN", "FIXED"));
+      const fixed = applyReferenceRepair(join(work, dir));
+      if (!fixed) {
+        failures.push(`${dir}: no reference repair available for this fixture`);
+        continue;
+      }
       // trace:exempt reason=internal-detail
       const after = spawnSync("sh", [join(work, dir, "oracle.sh")], { encoding: "utf8" });
       if (after.error || after.status !== 0) {

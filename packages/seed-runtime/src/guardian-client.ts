@@ -35,6 +35,8 @@ export const AGENT_METHODS = [
   "experiment.request",
   "capability.propose",
   "model.observed",
+  "champion.show",
+  "champion.history",
 ] as const;
 
 export type AgentMethod = (typeof AGENT_METHODS)[number];

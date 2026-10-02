@@ -1,25 +1,61 @@
-// seed-cli champion: champion pointer reads, history, and one-write rollback.
+// seed-cli champion: guardian-backed champion reads plus local rollback record.
 //
-// Purpose: `seed champion show|history|rollback` over the atomic champion
-// pointer. Why it exists: champion/challenger with rollback is the safety
-// core of promotion — sessions pin the ref, promotion moves it atomically,
-// rollback is one pointer write. Responsibilities: read pointer, list
-// history, append-then-move rollback. Invariants: rollback always preserves
-// the previous ref as the newest history entry before moving; never deletes
-// history. Public functions/types: showChampion, championHistory,
+// Purpose: `seed champion show|history` read the single truth (guardian
+// SQLite via champion.show/history); `rollback` records the local pointer
+// move. Why it exists: TOTALSPEC forbids two champion systems — the
+// guardian owns the pointer, the CLI cache only mirrors it.
+// Responsibilities: async guardian reads with local fallback, local
+// append-then-move rollback, history preservation.
+// Invariants: show/history prefer the guardian ref when reachable and fall
+// back to the local cache offline; rollback never deletes history.
+// Public functions/types: showChampion, championHistory,
 // rollbackChampion.
 
 import { loadChampion, saveChampion } from "./state.ts";
 import type { ChampionPointer } from "./state.ts";
+import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
+
+// trace:exempt reason=internal-detail
+function socketPath(): string {
+  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+}
 
 // trace:v1 id=impl.cli-champion-show work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
-export function showChampion(root?: string): ChampionPointer {
-  return loadChampion(root);
+export async function showChampion(root?: string): Promise<ChampionPointer> {
+  const local = loadChampion(root);
+  try {
+    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
+    const result = (await client.call("champion.show", {})) as { ref?: unknown };
+    client.close();
+    if (typeof result?.ref === "string" && result.ref.length > 0 && result.ref !== local.ref) {
+      local.ref = result.ref;
+      local.updatedAt = new Date().toISOString();
+      saveChampion(local, root);
+    }
+  } catch {
+    // offline: local cache is the best available truth
+  }
+  return local;
 }
 
 // trace:v1 id=impl.cli-champion-history work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
-export function championHistory(root?: string): ChampionPointer["history"] {
-  return loadChampion(root).history;
+export async function championHistory(root?: string): Promise<ChampionPointer["history"]> {
+  const local = loadChampion(root);
+  try {
+    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
+    const result = (await client.call("champion.history", {})) as { history?: Array<{ ref?: unknown; reason?: unknown; at?: unknown }> };
+    client.close();
+    if (Array.isArray(result?.history) && result.history.length > 0) {
+      return result.history.map((h) => ({
+        ref: typeof h.ref === "string" ? h.ref : "",
+        at: typeof h.at === "string" ? h.at : new Date(0).toISOString(),
+        reason: typeof h.reason === "string" ? h.reason : "",
+      }));
+    }
+  } catch {
+    // offline fallback below
+  }
+  return local.history;
 }
 
 // trace:v1 id=impl.cli-champion-rollback work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
@@ -27,6 +63,11 @@ export function rollbackChampion(ref: string, reason: string, root?: string): Ch
   if (!ref) throw new Error("rollback needs a ref");
   const pointer = loadChampion(root);
   const at = new Date().toISOString();
+  if (!pointer.history.some((h) => h.ref === ref)) {
+    throw new Error(
+      `rollback target ${JSON.stringify(ref)} is not a previously valid champion (budget: rollback, limit: history refs, requested: ${ref})`,
+    );
+  }
   pointer.history.push({ ref: pointer.ref, at, reason: `rollback to ${ref}: ${reason}` });
   pointer.ref = ref;
   pointer.updatedAt = at;

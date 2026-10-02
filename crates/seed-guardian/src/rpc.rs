@@ -37,6 +37,8 @@ pub const AGENT_METHODS: &[&str] = &[
     "experiment.request",
     "capability.propose",
     "model.observed",
+    "champion.show",
+    "champion.history",
 ];
 
 /// Guardian-only methods: rejected with method-not-found, never routed.
@@ -142,6 +144,8 @@ pub fn handle_line(db: &Db, line: &str) -> Option<String> {
         "experiment.request" => experiment_request(db, &req.id, &params),
         "capability.propose" => capability_propose(db, &req.id, &params),
         "model.observed" => model_observed(db, &req.id, &params),
+        "champion.show" => champion_show(db, &req.id),
+        "champion.history" => champion_history(db, &req.id),
         _ => fail(&req.id, -32601, "method not found"),
     };
     Some(out)
@@ -319,6 +323,27 @@ fn model_observed(db: &Db, id: &Option<Value>, params: &Value) -> String {
                 Err(e) => fail(id, -32603, &e),
             }
         }
+        Err(e) => fail(id, -32603, &e),
+    }
+}
+
+/// Read-only champion pointer for CLI show (single truth: guardian SQLite).
+// trace:v1 id=impl.rpc-champion-show work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+fn champion_show(db: &Db, id: &Option<Value>) -> String {
+    match crate::champion::current(db) {
+        Ok(current) => respond(id, serde_json::json!({"ref": current.unwrap_or_default()})),
+        Err(e) => fail(id, -32603, &e),
+    }
+}
+
+/// Read-only champion history for CLI history (append-only rows).
+// trace:v1 id=impl.rpc-champion-history work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+fn champion_history(db: &Db, id: &Option<Value>) -> String {
+    match crate::champion::history(db) {
+        Ok(rows) => respond(
+            id,
+            serde_json::json!({"history": rows.iter().map(|(r, reason, at)| serde_json::json!({"ref": r, "reason": reason, "at": at})).collect::<Vec<_>>()}),
+        ),
         Err(e) => fail(id, -32603, &e),
     }
 }

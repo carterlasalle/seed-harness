@@ -29,6 +29,24 @@ class Mechanism:
     ideas: tuple = field(default_factory=tuple)
 
 
+# trace:v1 id=impl.py-mechanism-scalar work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+def _store_scalar(current: dict, block_key: str | None, raw_line: str, stripped: str) -> None:
+    """Store one `key: value` scalar line (flow lists, quotes, blocks)."""
+    key, _, value = stripped.partition(":")
+    key, value = key.strip(), value.strip()
+    if value == "|":
+        return
+    if value.startswith("[") and value.endswith("]"):
+        current[key] = [item.strip() for item in value[1:-1].split(",") if item.strip()]
+    elif (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        current[key] = value[1:-1]
+    elif value.startswith("- "):
+        current.setdefault(key, []).append(value[2:].strip().strip('"'))
+    else:
+        current[key] = value
+    if key == "implementationIdeas" and isinstance(current.get(key), str):
+        current[key] = [current[key]]
+
 # trace:v1 id=impl.py-mechanism-parse work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def _parse_simple_yaml(text: str) -> list[dict]:
     """Parse the restricted catalog shape: `- ` entries, `key: value` lines, `|` blocks, `[a, b]` flows."""
@@ -37,6 +55,7 @@ def _parse_simple_yaml(text: str) -> list[dict]:
     block_key: str | None = None
     block_lines: list[str] = []
     for raw_line in text.splitlines():
+        line = raw_line
         if raw_line.startswith("#") or not raw_line.strip():
             continue
         if raw_line.startswith("- "):
@@ -48,36 +67,22 @@ def _parse_simple_yaml(text: str) -> list[dict]:
             current = {}
             rest = raw_line[2:].strip()
             if rest:
-                raw_line = f"  {rest}"
+                line = f"  {rest}"
             else:
                 block_key = None
                 continue
         if current is None:
             continue
         if block_key is not None:
-            if raw_line.startswith("    ") or raw_line.strip() == "":
-                block_lines.append(raw_line[4:] if raw_line.startswith("    ") else "")
+            if line.startswith("    ") or not line.strip():
+                block_lines.append(line[4:] if line.startswith("    ") else "")
                 continue
             current[block_key] = "\n".join(block_lines)
             block_key, block_lines = None, []
-        stripped = raw_line.strip()
+        stripped = line.strip()
         if ":" not in stripped:
             continue
-        key, _, value = stripped.partition(":")
-        key, value = key.strip(), value.strip()
-        if value == "|":
-            block_key = key
-            block_lines = []
-        elif value.startswith("[") and value.endswith("]"):
-            current[key] = [item.strip() for item in value[1:-1].split(",") if item.strip()]
-        elif (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
-            current[key] = value[1:-1]
-        elif value.startswith("- "):
-            current.setdefault(key, []).append(value[2:].strip().strip('"'))
-        else:
-            current[key] = value
-        if key == "implementationIdeas" and isinstance(current.get(key), str):
-            current[key] = [current[key]]
+        _store_scalar(current, block_key, line, stripped)
     if current is not None:
         if block_key is not None:
             current[block_key] = "\n".join(block_lines)
@@ -88,7 +93,7 @@ def _parse_simple_yaml(text: str) -> list[dict]:
 # trace:v1 id=impl.py-mechanism-load work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def _load_file(path: Path) -> list[Mechanism]:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except OSError:
         return []
     out = []

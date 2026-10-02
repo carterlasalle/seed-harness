@@ -88,3 +88,22 @@ export function admitChallenge(checks: {
   if (!checks.repairPass) return { decision: "discard", reason: "repair-fails" };
   return { decision: "admit", reason: "baseline-pass-mutation-fail-repair-pass" };
 }
+
+// trace:v1 id=impl.challenges-generate work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export function generateChallenges(
+  sources: readonly string[],
+  seed: number,
+  verify: (mutant: string) => { baselinePass: boolean; mutationPass: boolean; repairPass: boolean },
+): { operator: string; admitted: number; discarded: number }[] {
+  return MUTATION_OPERATORS.map((op) => {
+    let admitted = 0;
+    let discarded = 0;
+    for (const source of sources) {
+      const mutant = applyOperator(source, op.id, seed);
+      const verdict = admitChallenge(verify(mutant));
+      if (verdict.decision === "admit") admitted += 1;
+      else discarded += 1;
+    }
+    return { operator: op.id, admitted, discarded };
+  });
+}

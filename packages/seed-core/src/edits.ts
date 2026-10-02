@@ -19,7 +19,7 @@
  */
 
 // trace:exempt reason=internal-detail
-export type EditFormat = "full-file" | "unified-diff" | "search-replace";
+export type EditFormat = "full-file" | "unified-diff" | "search-replace" | "hashline";
 
 // trace:exempt reason=internal-detail
 export interface DiffLine {
@@ -46,7 +46,8 @@ export interface SearchReplaceBlock {
 export type EditOperation =
   | { format: "full-file"; content: string }
   | { format: "search-replace"; blocks: SearchReplaceBlock[] }
-  | { format: "unified-diff"; hunks: DiffHunk[] };
+  | { format: "unified-diff"; hunks: DiffHunk[] }
+  | { format: "hashline"; line: number; content: string };
 
 // trace:exempt reason=internal-detail
 export interface EditProtocol {
@@ -321,9 +322,54 @@ const fullFileProtocol: EditProtocol = {
 };
 
 // trace:exempt reason=internal-detail
+function looksLikeHashline(payload: string): boolean {
+  return /^@@line \d+ @@$/m.test(payload);
+}
+
+// trace:exempt reason=internal-detail
+function parseHashline(payload: string): EditOperation | null {
+  // trace:exempt reason=unit-test
+  const lines = payload.split("\n");
+  // trace:exempt reason=internal-detail
+  let line = -1;
+  // trace:exempt reason=internal-detail
+  const body: string[] = [];
+  // trace:exempt reason=internal-detail
+  let open = false;
+  for (const text of lines) {
+    // trace:exempt reason=internal-detail
+    const match = /^@@line (\d+) @@$/.exec(text.trim());
+    if (match) {
+      if (open) break;
+      line = Number(match[1]);
+      open = true;
+      continue;
+    }
+    if (open) body.push(text);
+  }
+  if (!open || line < 1) return null;
+  return { format: "hashline", line, content: body.join("\n") };
+}
+
+// trace:exempt reason=internal-detail
+const hashlineProtocol: EditProtocol = {
+  format: "hashline",
+  parse: (payload) => (looksLikeHashline(payload) ? parseHashline(payload) : null),
+  apply: (original, operation) => {
+    if (operation.format !== "hashline") throw new EditError("operation is not a hashline edit");
+    // trace:exempt reason=internal-detail
+    const lines = original.split("\n");
+    if (operation.line > lines.length) throw new EditError(`hashline target line ${operation.line} beyond ${lines.length} lines`);
+    lines[operation.line - 1] = operation.content;
+    return lines.join("\n");
+  },
+};
+
+// trace:exempt reason=internal-detail
 export const EDIT_PROTOCOLS: readonly EditProtocol[] = [
   unifiedDiffProtocol,
   searchReplaceProtocol,
+  hashlineProtocol,
   fullFileProtocol,
 ];
 
@@ -331,6 +377,7 @@ export const EDIT_PROTOCOLS: readonly EditProtocol[] = [
 export function detectEditFormat(payload: string): EditFormat {
   if (looksLikeUnifiedDiff(payload)) return "unified-diff";
   if (looksLikeSearchReplace(payload)) return "search-replace";
+  if (looksLikeHashline(payload)) return "hashline";
   return "full-file";
 }
 
