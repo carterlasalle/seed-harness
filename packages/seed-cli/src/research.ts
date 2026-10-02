@@ -32,3 +32,15 @@ export function refreshResearch(dir?: string, root?: string): ResearchReport {
     return { ok: false, output: error instanceof Error ? error.message : String(error) };
   }
 }
+
+// trace:v1 id=impl.cli-research-live work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export async function refreshResearchLive(sources: { github: { owner: string; repo: string }[]; arxiv: string[] }): Promise<ResearchReport> {
+  const { fetchMechanismEntries } = await import("@seed/seed-lab/src/research.ts");
+  try {
+    // trace:exempt reason=internal-detail
+    const entries = await fetchMechanismEntries(sources);
+    return { ok: true, output: `fetched ${entries.length} mechanism entries (${entries.map((e) => e.id).join(", ").slice(0, 200)})` };
+  } catch (error) {
+    return { ok: false, output: error instanceof Error ? error.message : String(error) };
+  }
+}

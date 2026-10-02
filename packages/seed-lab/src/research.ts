@@ -60,6 +60,32 @@ export function parseArxivRecord(arxivId: string, title: string, summary: string
   };
 }
 
+// trace:v1 id=impl.research-fetch work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export async function fetchMechanismEntries(sources: { github: { owner: string; repo: string }[]; arxiv: string[] }): Promise<MechanismEntry[]> {
+  const out: MechanismEntry[] = [];
+  for (const g of sources.github) {
+    // trace:exempt reason=internal-detail
+    const res = await fetch(githubReleaseUrl(g.owner, g.repo), { headers: process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {} });
+    if (!res.ok) continue;
+    // trace:exempt reason=internal-detail
+    const payload = (await res.json()) as { tag_name?: string; body?: string };
+    out.push(parseGithubRelease(g.owner, g.repo, { tag: payload.tag_name, body: payload.body }));
+  }
+  for (const id of sources.arxiv) {
+    // trace:exempt reason=internal-detail
+    const res = await fetch(arxivRecordUrl(id));
+    if (!res.ok) continue;
+    // trace:exempt reason=internal-detail
+    const xml = await res.text();
+    // trace:exempt reason=internal-detail
+    const title = xml.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.trim().slice(0, 200) ?? id;
+    // trace:exempt reason=internal-detail
+    const summary = xml.match(/<summary>([\s\S]*?)<\/summary>/)?.[1]?.trim() ?? "";
+    out.push(parseArxivRecord(id, title, summary));
+  }
+  return out;
+}
+
 // trace:v1 id=impl.research-merge work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
 export function mergeEntries(existing: MechanismEntry[], fresh: MechanismEntry[]): MechanismEntry[] {
   const seen = new Set(existing.map((e) => e.id));

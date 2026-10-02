@@ -137,3 +137,11 @@ export async function runModelProbes(
   const profile = profileFromProbes(model, results);
   return { profile, policy: policyForModel(profile) };
 }
+
+// trace:v1 id=impl.profiler-live work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export async function runLiveModelProbes(
+  model: string,
+  runPrompt: (prompt: string, model: string) => Promise<{ success: boolean; latencyMs: number; tokens: number; costUsd: number }>,
+): Promise<{ profile: ModelProfile; policy: ModelPolicy }> {
+  return runModelProbes(model, async (probe, m) => runPrompt(`Seed probe ${probe}: solve the routine coding task with the python tool and reply DONE.`, m));
+}

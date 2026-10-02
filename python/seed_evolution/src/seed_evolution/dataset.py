@@ -67,12 +67,11 @@ def save_split(split: Split, path: str | Path) -> None:
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     # trace:exempt reason=internal-detail
-    def ids(items) -> list:
-        return [c["id"] if isinstance(c, dict) else c.id for c in items]
+    as_id = lambda c: c["id"] if isinstance(c, dict) else c.id
 
     out.write_text(
         json.dumps(
-            {"train": ids(split.train), "val": ids(split.val), "holdout": ids(split.holdout)},
+            {"train": [as_id(c) for c in split.train], "val": [as_id(c) for c in split.val], "holdout": [as_id(c) for c in split.holdout]},
             indent=2,
         )
         + "\n",
