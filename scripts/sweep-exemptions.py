@@ -35,13 +35,13 @@ PY_DEF = re.compile(
 
 
 def is_test_fn(path: Path, name: str, line: str) -> bool:
-    if "test" in path.name:
-        return True
-    if name.startswith("test_") or name.startswith("test"):
-        return True
-    if "test(" in line or "describe(" in line or "it(" in line:
-        return True
-    return False
+    return (
+        "test" in path.name
+        or name.startswith(("test_", "test"))
+        or "test(" in line
+        or "describe(" in line
+        or "it(" in line
+    )
 
 
 def lookback_has_marker(lines: list[str], idx: int) -> bool:
@@ -53,18 +53,17 @@ def lookback_has_marker(lines: list[str], idx: int) -> bool:
 
 def is_doc_or_attr(line: str, lang: str) -> bool:
     s = line.strip()
+    dq = chr(34) * 3
+    sq = chr(39) * 3
     if lang == "ts":
-        return (s.startswith("//") or s.startswith("*") or s.startswith("/*")
-                or s.startswith("@") or s == "")
+        return (s.startswith(("//", "*", "/*", "@")) or not s)
     if lang == "rs":
-        return (s.startswith("///") or s.startswith("//!")
-                or s.startswith("//") or s.startswith("#[") or s == "")
+        return (s.startswith(("///", "//!", "//", "#[")) or not s)
     if lang == "py":
-        return (s.startswith("#") or s.startswith('"""')
-                or s.startswith("'''") or s == "")
+        return (s.startswith(("#", dq, sq)) or not s)
     if lang == "sh":
-        return s.startswith("#") or s == ""
-    return s == ""
+        return s.startswith("#") or not s
+    return not s
 
 
 def lang_of(path: Path) -> str | None:
@@ -80,26 +79,22 @@ def lang_of(path: Path) -> str | None:
 
 
 def exempt_token(lang: str, reason: str) -> str:
-    if lang == "py" or lang == "sh":
+    if lang in {"py", "sh"}:
         return f"# trace:exempt reason={reason}"
     return f"// trace:exempt reason={reason}"
 
 
 def should_skip(path: Path, root: Path) -> bool:
     rel = str(path.relative_to(root))
-    if path.name in SKIP_FILES:
-        return True
-    if path.name.endswith(SKIP_SUFFIXES):
-        return True
-    for part in path.relative_to(root).parts:
-        if part in SKIP_DIRS:
-            return True
-    if rel.startswith(("docs/", "prompts/", "research/",
-                       "schemas/", "capabilities/", ".agents/",
-                       ".claude/", ".codex/", ".pi/", ".omp/",
-                       ".hermes/", ".bugcorpus/")):
-        return True
-    return False
+    return (
+        path.name in SKIP_FILES
+        or path.name.endswith(SKIP_SUFFIXES)
+        or any(part in SKIP_DIRS for part in path.relative_to(root).parts)
+        or rel.startswith(("docs/", "prompts/", "research/",
+                           "schemas/", "capabilities/", ".agents/",
+                           ".claude/", ".codex/", ".pi/", ".omp/",
+                           ".hermes/", ".bugcorpus/"))
+    )
 
 
 def run_sweep(root: str | Path,
@@ -156,7 +151,7 @@ def run_sweep(root: str | Path,
         if not inserts:
             continue
         for idx, marker in sorted(inserts, reverse=True):
-            if marker == "":
+            if not marker:
                 del body[idx]
             else:
                 body[idx] = marker + "\n" + body[idx]

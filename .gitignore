@@ -35,3 +35,7 @@ evals/core/generated/*
 .seed-state/
 .scratch/
 SEED_SCRATCH/
+# Bughunt runtime (configure/scan artifacts, never committed).
+.bughunt/
+.pyre_configuration
+bughunt.toml

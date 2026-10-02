@@ -169,7 +169,18 @@ export async function main(argv: string[]): Promise<number> {
         if (sub === "run" || !sub) {
           const limitFlag = rest.indexOf("--limit");
           const limit = limitFlag >= 0 ? Number(rest[limitFlag + 1]) : undefined;
-          emit(runEval(Number.isFinite(limit) ? { limit } : {}));
+          const modelFlag = rest.indexOf("--model");
+          const model = modelFlag >= 0 ? rest[modelFlag + 1] : undefined;
+          const turnsFlag = rest.indexOf("--max-turns");
+          const maxTurns = turnsFlag >= 0 ? Number(rest[turnsFlag + 1]) : undefined;
+          emit(await runEval({
+            limit: Number.isFinite(limit) ? limit : undefined,
+            model,
+            maxTurns: Number.isFinite(maxTurns) ? maxTurns : undefined,
+            holdout: rest.includes("--holdout"),
+            replay: rest.includes("--replay"),
+            crossModel: rest.includes("--cross-model") ? rest.filter((a) => a.includes("/")).slice(0, 3) : undefined,
+          }));
           return 0;
         }
         // trace:exempt reason=internal-detail
@@ -218,11 +229,11 @@ export async function main(argv: string[]): Promise<number> {
       case "champion": {
         // trace:exempt reason=internal-detail
         if (sub === "show" || !sub) {
-          emit(showChampion());
+          emit(await showChampion());
           return 0;
         }
         if (sub === "history") {
-          emit(championHistory());
+          emit(await championHistory());
           return 0;
         }
         // trace:exempt reason=internal-detail

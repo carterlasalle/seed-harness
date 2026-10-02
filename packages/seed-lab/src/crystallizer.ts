@@ -159,3 +159,17 @@ export function buildCrystallizationProposal(
     ].join("\n"),
   };
 }
+
+// trace:v1 id=impl.crystallizer-pipeline work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export function crystallizationPipeline(
+  traces: BehaviorTrace[],
+  samples: Map<string, string[]>,
+): { candidate: CrystallizationCandidate; proposal: CrystallizationProposal }[] {
+  const out: { candidate: CrystallizationCandidate; proposal: CrystallizationProposal }[] = [];
+  for (const candidate of findCrystallizationCandidates(traces)) {
+    const candidateSamples = samples.get(candidate.pattern) ?? [];
+    if (candidateSamples.length === 0) continue;
+    out.push({ candidate, proposal: buildCrystallizationProposal(candidate, candidateSamples) });
+  }
+  return out;
+}

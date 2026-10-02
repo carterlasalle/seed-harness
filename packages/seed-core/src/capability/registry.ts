@@ -82,6 +82,70 @@ export interface StartedCapability {
 }
 
 // trace:exempt reason=internal-detail
+export interface SkillContent {
+  id: string;
+  description: string;
+  path: string;
+  body: string | null;
+}
+
+// trace:v1 id=impl.sc-skills-load work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export function loadSkillContents(
+  capabilities: readonly DiscoveredCapability[],
+  options: { includeBodies?: boolean; maxBytes?: number } = {},
+): SkillContent[] {
+  // trace:exempt reason=internal-detail
+  const maxBytes = options.maxBytes ?? 65536;
+  // trace:exempt reason=internal-detail
+  const out: SkillContent[] = [];
+  for (const capability of capabilities) {
+    for (const contribution of capability.manifest.contributions) {
+      if (contribution.kind !== "skill") continue;
+      // trace:exempt reason=internal-detail
+      const holder = contribution as unknown;
+      // trace:exempt reason=internal-detail
+      const skillPath =
+        holder !== null && typeof holder === "object" && "path" in holder && typeof holder.path === "string"
+          ? resolve(capability.dir, holder.path)
+          : null;
+      // trace:exempt reason=internal-detail
+      let body: string | null = null;
+      if (options.includeBodies && skillPath) {
+        try {
+          // trace:exempt reason=internal-detail
+          const stat = statSync(skillPath);
+          if (stat.isFile() && stat.size <= maxBytes) body = readFileSync(skillPath, "utf8");
+        } catch {
+          body = null;
+        }
+      }
+      out.push({ id: contribution.id, description: contribution.description, path: skillPath ?? "", body });
+    }
+  }
+  return out.sort((a, b) => (a.id === b.id ? 0 : a.id < b.id ? -1 : 1));
+}
+
+// trace:exempt reason=internal-detail
+export interface LspOperation {
+  op: "symbol_definition" | "symbol_references" | "workspace_symbols" | "document_symbols" | "diagnostics" | "hover" | "rename_preview";
+  params?: unknown;
+}
+
+// trace:v1 id=impl.sc-lsp-adapter work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export async function lspRequest(
+  handles: readonly StartedCapability[],
+  operation: LspOperation,
+  timeoutMs = 15000,
+): Promise<{ capability: string; result: unknown }> {
+  // trace:exempt reason=internal-detail
+  const lsp = handles.find((h) => h.manifest.contributions.some((c) => c.kind === "lsp"));
+  if (!lsp) throw new Error("no lsp capability started (start one with contributions kind lsp)");
+  // trace:exempt reason=internal-detail
+  const result = await lsp.request(operation.op, operation.params);
+  return { capability: lsp.manifest.id, result };
+}
+
+// trace:exempt reason=internal-detail
 export interface ReloadOptions {
   activeSessions: number;
   grantedPermissions?: readonly CapabilityPermission[];
@@ -342,7 +406,14 @@ class JsonlChannel {
   }
 
   // trace:exempt reason=internal-detail
-  async hello(timeoutMs: number): Promise<string> {
+  async hello(timeoutMs: number, runtime?: string): Promise<string> {
+    if (runtime === "mcp") {
+      // trace:exempt reason=internal-detail
+      const init = await this.request("initialize", { protocolVersion: "2024-11-05", capabilities: {} }, timeoutMs);
+      // trace:exempt reason=internal-detail
+      await this.request("notifications/initialized", {}, timeoutMs).catch(() => undefined);
+      return `mcp initialized (${JSON.stringify(init).slice(0, 80)})`;
+    }
     try {
       await this.request("hello", { abi: CAPABILITY_ABI }, timeoutMs);
       return "hello acknowledged";
@@ -355,6 +426,50 @@ class JsonlChannel {
       throw error;
     }
   }
+}
+
+export type HookEvent =
+  | "session_start" | "session_end" | "task_start" | "task_end"
+  | "turn_start" | "turn_end" | "before_model" | "after_model"
+  | "before_tool" | "after_tool" | "before_context_build" | "after_context_build"
+  | "before_compaction" | "after_compaction" | "before_edit" | "after_edit"
+  | "validation_result";
+
+// trace:exempt reason=internal-detail
+export interface HookDispatchResult {
+  event: HookEvent;
+  delivered: number;
+  latencyMs: number;
+  errors: string[];
+}
+
+// trace:v1 id=impl.sc-hooks-dispatch work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export async function dispatchHooks(
+  handles: readonly StartedCapability[],
+  event: HookEvent,
+  payload: unknown,
+): Promise<HookDispatchResult> {
+  // trace:exempt reason=internal-detail
+  const startedAt = Date.now();
+  // trace:exempt reason=internal-detail
+  const errors: string[] = [];
+  // trace:exempt reason=internal-detail
+  let delivered = 0;
+  for (const handle of handles) {
+    if (!handle.manifest.contributions.some((c) => c.kind === "hook")) continue;
+    // trace:exempt reason=internal-detail
+    const contribution = handle.manifest.contributions.find((c) => c.kind === "hook") as ({ failurePolicy?: unknown } | undefined);
+    // trace:exempt reason=internal-detail
+    const failurePolicy = typeof contribution?.failurePolicy === "string" ? contribution.failurePolicy : "continue";
+    try {
+      await handle.request("hook", { event, payload, failure_policy: failurePolicy });
+      delivered += 1;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+      if (failurePolicy === "fatal") throw error;
+    }
+  }
+  return { event, delivered, latencyMs: Date.now() - startedAt, errors };
 }
 
 // trace:exempt reason=internal-detail
@@ -410,6 +525,16 @@ function spawnCapability(manifest: CapabilityManifest, dir: string): ChildProces
     if (value !== undefined) env[key] = value;
   }
   // trace:exempt reason=internal-detail
+  const extra = manifest as unknown as { env?: unknown };
+  if (extra !== null && typeof extra === "object" && "env" in extra && Array.isArray(extra.env)) {
+    for (const key of extra.env) {
+      if (typeof key !== "string" || key === "") continue;
+      // trace:exempt reason=internal-detail
+      const value = process.env[key];
+      if (value !== undefined) env[key] = value;
+    }
+  }
+  // trace:exempt reason=internal-detail
   const options = { cwd: base, env };
   if (entrypoint.endsWith(".py")) return spawn("python3", [entrypoint], options);
   if (/\.(c|m)?js$/.test(entrypoint)) return spawn(process.execPath, [entrypoint], options);
@@ -442,8 +567,6 @@ export async function startCapability(
     };
   }
 
-  // ponytail: mcp runtime reuses the jsonl-stdio envelope for now; swap to an
-  // MCP initialize handshake when an actual mcp capability package lands.
   // trace:exempt reason=internal-detail
   const child = spawnCapability(manifest, options.dir);
   // trace:exempt reason=internal-detail
@@ -451,7 +574,7 @@ export async function startCapability(
   // trace:exempt reason=internal-detail
   let hello: string;
   try {
-    hello = await channel.hello(manifest.limits.timeoutMs);
+    hello = await channel.hello(manifest.limits.timeoutMs, manifest.runtime);
   } catch (error) {
     await stopChild(child);
     if (error instanceof CapabilityStartError) throw error;

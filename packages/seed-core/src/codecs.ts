@@ -42,3 +42,46 @@ export const JSON_CONTEXT_CODEC: ContextCodec<unknown> = {
     }
   },
 };
+
+// trace:exempt reason=internal-detail
+export const SUMMARY_CONTEXT_CODEC: ContextCodec<unknown> = {
+  name: "structured-summary",
+  encode: (value) => JSON.stringify({ summary: value }),
+  decode: (text) => {
+    try {
+      const parsed = JSON.parse(text) as { summary?: unknown };
+      if (typeof parsed !== "object" || parsed === null || !("summary" in parsed)) {
+        throw new CodecError("structured-summary payload misses summary");
+      }
+      return (parsed as { summary: unknown }).summary;
+    } catch (error) {
+      if (error instanceof CodecError) throw error;
+      throw new CodecError(`structured-summary codec could not decode payload: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  },
+};
+
+// trace:exempt reason=internal-detail
+export const RETRIEVAL_CONTEXT_CODEC: ContextCodec<unknown> = {
+  name: "retrieval-archive",
+  encode: (value) => JSON.stringify({ archive: [value] }),
+  decode: (text) => {
+    try {
+      const parsed = JSON.parse(text) as { archive?: unknown };
+      if (typeof parsed !== "object" || parsed === null || !Array.isArray((parsed as { archive?: unknown }).archive)) {
+        throw new CodecError("retrieval-archive payload misses archive array");
+      }
+      return ((parsed as { archive: unknown[] }).archive[0] as unknown);
+    } catch (error) {
+      if (error instanceof CodecError) throw error;
+      throw new CodecError(`retrieval-archive codec could not decode payload: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  },
+};
+
+// trace:exempt reason=internal-detail
+export const CONTEXT_CODECS: readonly ContextCodec<unknown>[] = [
+  JSON_CONTEXT_CODEC,
+  SUMMARY_CONTEXT_CODEC,
+  RETRIEVAL_CONTEXT_CODEC,
+];

@@ -16,15 +16,61 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { indexEvalResult, saveEvalResult, seedRoot } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
+import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
+import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
 
 export interface EvalRunOptions {
   limit?: number;
   root?: string;
   suite?: string;
+  model?: string;
+  maxTurns?: number;
+  holdout?: boolean;
+  replay?: boolean;
+  crossModel?: string[];
+}
+
+// trace:exempt reason=internal-detail
+function defaultSocketPath(): string {
+  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+}
+
+// trace:v1 id=impl.cli-eval-case work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export async function runEvalCase(dir: string, options: { model?: string; maxTurns?: number } = {}): Promise<{ passed: boolean; detail: string }> {
+  const manifest = JSON.parse(readFileSync(join(dir, "task.json"), "utf8")) as {
+    prompt?: string;
+    oracleCommand?: string;
+    timeoutMs?: number;
+  };
+  // trace:exempt reason=internal-detail
+  const oracle = typeof manifest.oracleCommand === "string" && manifest.oracleCommand ? manifest.oracleCommand : "oracle.sh";
+  // trace:exempt reason=internal-detail
+  const timeoutMs = typeof manifest.timeoutMs === "number" && manifest.timeoutMs > 0 ? Math.min(manifest.timeoutMs, 300000) : 300000;
+  // trace:exempt reason=internal-detail
+  const work = mkdtempSync(join(tmpdir(), "seed-eval-"));
+  try {
+    cpSync(dir, work, { recursive: true });
+    // trace:exempt reason=internal-detail
+    const client = await connectGuardian({ socketPath: defaultSocketPath(), connectTimeoutMs: 5000 });
+    // trace:exempt reason=internal-detail
+    const organism = await runOrganismTask({ client, workspace: work, taskBrief: manifest.prompt ?? dir, sessionId: `eval-${Date.now().toString(36)}` });
+    // trace:exempt reason=internal-detail
+    const loop = await organism.runAgentLoop({ model: options.model, maxTurns: options.maxTurns ?? 12 });
+    await organism.end(loop.done && loop.turns.length > 0 ? "done" : "failed", loop.summary.slice(0, 500));
+    client.close();
+    // trace:exempt reason=internal-detail
+    const child = spawnSync("sh", [join(work, oracle)], { encoding: "utf8", timeout: timeoutMs, cwd: work });
+    if (child.error || child.status !== 0) {
+      return { passed: false, detail: `agent ran ${loop.turns.length} turns; oracle failed${child.error ? ` (${child.error.message})` : ` (exit ${child.status})`}` };
+    }
+    return { passed: true, detail: `agent ran ${loop.turns.length} turns; oracle passed` };
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 }
 
 // trace:v1 id=impl.cli-eval-run work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
-export function runEval(options: EvalRunOptions = {}): EvalResultSummary {
+export async function runEval(options: EvalRunOptions = {}): Promise<EvalResultSummary> {
   const root = options.root;
   const generated = join(seedRoot(root), "evals", "core", "generated");
   let dirs: string[] = [];
@@ -37,46 +83,34 @@ export function runEval(options: EvalRunOptions = {}): EvalResultSummary {
     dirs = [];
   }
   // trace:exempt reason=internal-detail
+  if (options.holdout) dirs = dirs.filter((_, i) => i % 5 === 4);
+  // trace:exempt reason=internal-detail
   if (options.limit) dirs = dirs.slice(0, Math.max(1, options.limit));
+  // trace:exempt reason=internal-detail
+  const models = options.crossModel?.length ? options.crossModel : [options.model ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4"];
+  // trace:exempt reason=internal-detail
   const failures: string[] = [];
+  // trace:exempt reason=internal-detail
   let passed = 0;
-  for (const dir of dirs) {
-    const manifestPath = join(generated, dir, "task.json");
-    if (!existsSync(manifestPath)) {
-      failures.push(`${dir}: missing task.json`);
-      continue;
-    }
-    let oracle = "oracle.sh";
-    let timeoutMs = 300000;
-    try {
-      // trace:exempt reason=internal-detail
-      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-        oracleCommand?: string;
-        timeoutMs?: number;
-      };
-      if (typeof manifest.oracleCommand === "string" && manifest.oracleCommand) {
-        oracle = manifest.oracleCommand;
+  for (const model of models) {
+    for (const dir of dirs) {
+      const manifestPath = join(generated, dir, "task.json");
+      if (!existsSync(manifestPath)) {
+        failures.push(`${dir}@${model}: missing task.json`);
+        continue;
       }
-      // trace:exempt reason=internal-detail
-      if (typeof manifest.timeoutMs === "number" && manifest.timeoutMs > 0) {
-        timeoutMs = Math.min(manifest.timeoutMs, 300000);
+      try {
+        // trace:exempt reason=internal-detail
+        const result = await runEvalCase(join(generated, dir), { model, maxTurns: options.maxTurns });
+        if (result.passed) passed += 1;
+        else failures.push(`${dir}@${model}: ${result.detail}`);
+      } catch (error) {
+        failures.push(`${dir}@${model}: ${error instanceof Error ? error.message : String(error)}`);
       }
-    } catch {
-      failures.push(`${dir}: unreadable task.json`);
-      continue;
-    }
-    // trace:exempt reason=internal-detail
-    const child = spawnSync("sh", [join(generated, dir, oracle)], {
-      encoding: "utf8",
-      timeout: timeoutMs,
-      cwd: join(generated, dir),
-    });
-    if (child.error || child.status !== 0) {
-      failures.push(`${dir}: oracle failed${child.error ? ` (${child.error.message})` : ` (exit ${child.status})`}`);
-    } else {
-      passed += 1;
     }
   }
+  // trace:exempt reason=internal-detail
+  const total = dirs.length * models.length;
   // trace:exempt reason=internal-detail
   const id =
     options.suite === "smoke"
@@ -86,7 +120,7 @@ export function runEval(options: EvalRunOptions = {}): EvalResultSummary {
     id,
     at: new Date().toISOString(),
     suite: options.suite ?? "core",
-    total: dirs.length,
+    total,
     passed,
     failed: failures.length,
     failures,

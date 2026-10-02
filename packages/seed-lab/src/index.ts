@@ -13,6 +13,7 @@ export * from "./crystallizer.ts";
 export * from "./mutation.ts";
 export * from "./candidate.ts";
 export * from "./challenges.ts";
+export * from "./evolution.ts";
 export * from "./model-profiler.ts";
 export * from "./gepa.ts";
 export * from "./experience.ts";

@@ -1,31 +1,31 @@
 // seed-cli run: single-task execution through the champion-pinned organism.
 //
 // Purpose: `seed run` executes one task through runOrganismTask (hello >
-// champion pin > python turn > task.end) and records it. Why it exists:
-// REQ-SEED-EZPD6B85 needs `seed run` to exercise the real Day-1 path —
-// the python primitive with telemetry and the echo probe as the first
-// turn — instead of bypassing the organism with a direct echo call.
-// Responsibilities: build a live or fallback guardian client, run one
-// ephemeral python turn, then the echo probe, persist the run record +
-// task.result.
-// Invariants: python stays visible (organism throws otherwise); every run
-// is recorded even when the probe fails (ok=false); without a guardian
-// socket the run degrades to the local echo probe with detail marked
-// `noguardian` instead of failing the foreground task.
+// champion pin > model-driven python turns > task.end) and records it.
+// Why it exists: TOTALSPEC needs `seed run` to run a real model agent loop
+// against the guardian — no probe, no echo, no noguardian fallback.
+// Responsibilities: mandatory guardian client, champion from hello (single
+// truth), model turn loop, friction over the real trajectory, run record.
+// Invariants: guardian failure fails the run (never a successful echo);
+// champion in the record is the hello-pinned sha; every python turn emits
+// telemetry via the organism.
 // Public functions/types: RunOptions, runTask.
 
-import { appendJsonl, loadChampion, recordRun, stateDir } from "./state.ts";
+import { appendJsonl, loadChampion, recentRuns, recordRun, stateDir } from "./state.ts";
 import type { RunRecord } from "./state.ts";
-import { callEcho, discoverCapabilities } from "./capabilities.ts";
+import { discoverCapabilities } from "./capabilities.ts";
 import { selectTools } from "@seed/seed-core/src/router.ts";
 import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
 import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
 import { detectFriction } from "@seed/seed-core/src/friction.ts";
 import type { FrictionObservation } from "@seed/seed-core/src/friction.ts";
+import { runEvolutionCycle } from "@seed/seed-lab/src/evolution.ts";
 export interface RunOptions {
   capabilities?: string[];
   session?: string;
   root?: string;
+  model?: string;
+  maxTurns?: number;
 }
 
 
@@ -64,39 +64,45 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
     payload: { runId: id, prompt: trimmed.slice(0, 200), champion: champion.ref },
   });
   try {
-    // Day-1 turn through the real organism: one python execution with
-    // telemetry, then the echo probe as the observable completion.
-    // post-task: real organism turn, then friction extraction over the turn.
-    let turnNote = "noguardian";
-    let frictionNote = "friction=none";
-    try {
-      // trace:exempt reason=internal-detail
-      const socketPath = `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
-      const client = await connectGuardian({ socketPath, connectTimeoutMs: 2000 });
-      const organism = await runOrganismTask({
-        client,
-        workspace: process.cwd(),
-        taskBrief: trimmed,
-        sessionId: session,
-      });
-      const turn = await organism.runTurn({
-        prompt: `ephemeral: run-${id}`,
-        code: `print(${JSON.stringify(`run ${id} champion ${champion.ref}`)})`,
-      });
-      await organism.end(turn.ok ? "done" : "failed", turn.stdout.slice(0, 500));
-      turnNote = turn.ok ? "python-ok" : "python-failed";
-      // trace:exempt reason=internal-detail
-      const observations: FrictionObservation[] = [
-        { turn: 1, kind: "tool", tool: "python", status: turn.ok ? "ok" : "error" },
-      ];
-      const signals = detectFriction(observations);
-      frictionNote = signals.length === 0 ? "friction=none" : `friction=${signals.map((s) => s.rule).join("+")}`;
-    } catch {
-      turnNote = "noguardian";
-      frictionNote = "friction=none";
-    }
+    // Real agent loop: guardian is mandatory (no noguardian fallback),
+    // champion comes from hello (single truth), the model drives python
+    // turns, friction runs over the real trajectory.
     // trace:exempt reason=internal-detail
-    const echoed = callEcho({ prompt: trimmed, session, champion: champion.ref }, root);
+    const socketPath = `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+    const client = await connectGuardian({ socketPath, connectTimeoutMs: 5000 });
+    const organism = await runOrganismTask({
+      client,
+      workspace: process.cwd(),
+      taskBrief: trimmed,
+      sessionId: session,
+    });
+    // trace:exempt reason=internal-detail
+    const pinned = organism.hello.champion_sha || champion.ref;
+    // trace:exempt reason=internal-detail
+    const loop = await organism.runAgentLoop({ maxTurns: options.maxTurns ?? 12, model: options.model, skills: cards.map((c) => ({ id: c.id, description: c.description })) });
+    await organism.end(loop.turns.length > 0 && loop.done ? "done" : "failed", loop.summary.slice(0, 500) || trimmed.slice(0, 500));
+    // trace:exempt reason=internal-detail
+    const turnNote = `agent-turns=${loop.turns.length}`;
+    // trace:exempt reason=internal-detail
+    const observations: FrictionObservation[] = loop.turns.map((t, index) => ({
+      turn: index + 1, kind: "tool", tool: "python", status: t.ok ? "ok" : "error",
+    }));
+    // trace:exempt reason=internal-detail
+    const signals = detectFriction(observations);
+    // trace:exempt reason=internal-detail
+    const frictionNote = signals.length === 0 ? "friction=none" : `friction=${signals.map((s) => s.rule).join("+")}`;
+    // trace:exempt reason=internal-detail
+    const cycle = await runEvolutionCycle({
+      client,
+      taskId: id,
+      observations,
+      signals,
+      tasksSinceCycle: recentRuns(5, root).length,
+      clustersSinceCycle: 0,
+      model: options.model,
+    }).catch(() => null);
+    // trace:exempt reason=internal-detail
+    const cycleNote = cycle ? ` cycle=[${cycle.stages.join(" ")}]` : "";
     // trace:exempt reason=internal-detail
     const record: RunRecord = {
       id,
@@ -104,8 +110,8 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
       session,
       prompt: trimmed,
       capabilities: picked,
-      ok: true,
-      detail: `champion=${champion.ref} caps=[${picked.join(",")}] ${turnNote} ${frictionNote} echo=${JSON.stringify(echoed).slice(0, 120)}`,
+      ok: loop.done && loop.turns.length > 0,
+      detail: `champion=${pinned} caps=[${picked.join(",")}] ${turnNote} ${frictionNote}${cycleNote} summary=${loop.summary.slice(0, 120)}`,
     };
     // trace:exempt reason=internal-detail
     recordRun(record, root);
@@ -119,7 +125,7 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
       prompt: trimmed,
       capabilities: picked,
       ok: false,
-      detail: error instanceof Error ? error.message : String(error),
+      detail: `champion=${champion.ref} agent-turns=0 friction=none error=${error instanceof Error ? error.message : String(error)}`,
     };
     // trace:exempt reason=internal-detail
     recordRun(record, root);
