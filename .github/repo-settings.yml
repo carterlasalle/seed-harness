@@ -23,7 +23,7 @@
 # reviewer exists; see launchpad-platform .github/rulesets/main.json pattern):
 #   gh api repos/carterlasalle/seed-harness/branches/main/protection -X PUT \
 #     -f required_status_checks[strict]=true \
-#     -f required_status_checks[checks][][context]='ci / gates' \
+#     -f required_status_checks[checks][][context]='gates' \
 #     -f required_status_checks[checks][][context]='CodeQL' \
 #     -f enforce_admins=true \
 #     -f required_pull_request_reviews[dismiss_stale_reviews]=true \
@@ -56,7 +56,7 @@ labels:
 branch_protection:
   pattern: main
   solo_owner_mode: true
-  required_status_checks: ["ci / gates", "CodeQL"]
+  required_status_checks: ["gates", "CodeQL"]
   strict: true
   enforce_admins: true
   dismiss_stale_reviews: true
