@@ -14,7 +14,7 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, wri
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { indexEvalResult, saveEvalResult, seedRoot } from "./state.ts";
+import { indexEvalResult, listEvalResults, saveEvalResult, seedRoot } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
 import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
 import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
@@ -122,8 +122,16 @@ export async function runEval(options: EvalRunOptions = {}): Promise<EvalResultS
   }
   // trace:exempt reason=internal-detail
   if (options.holdout) dirs = dirs.filter((_, i) => i % 5 === 4);
+  // Replay: re-run the failing dirs from the most recent stored eval result
+  // first so regressions surface before fresh tasks consume budget.
   // trace:exempt reason=internal-detail
-  if (options.limit) dirs = dirs.slice(0, Math.max(1, options.limit));
+  if (options.replay) {
+    // trace:exempt reason=internal-detail
+    const prior = listEvalResults(root).at(-1);
+    // trace:exempt reason=internal-detail
+    const failedDirs = new Set((prior?.failures ?? []).map((f: string) => f.split("@")[0]?.split(":")[0]).filter(Boolean));
+    if (failedDirs.size > 0) dirs = [...dirs].sort((a, b) => Number(failedDirs.has(b)) - Number(failedDirs.has(a)));
+  }
   // trace:exempt reason=internal-detail
   const models = options.crossModel?.length ? options.crossModel : [options.model ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4"];
   // trace:exempt reason=internal-detail
@@ -241,9 +249,9 @@ export function compareEvals(
   const baseRate = baseline.total === 0 ? 0 : baseline.passed / baseline.total;
   const challRate = challenger.total === 0 ? 0 : challenger.passed / challenger.total;
   // trace:exempt reason=internal-detail
-  const newFailures = challenger.failures.filter((f) => {
+  const newFailures = challenger.failures.filter((f: string) => {
     const name = f.split(":")[0];
-    return !baseline.failures.some((b) => b.startsWith(`${name}:`) || b === f);
+    return !baseline.failures.some((b: string) => b.startsWith(`${name}:`) || b === f);
   });
   const nonInferior = challRate >= baseRate && newFailures.length === 0;
   return {
