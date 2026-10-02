@@ -193,7 +193,9 @@ def generate(seed: int, output: Path) -> list[Path]:
                 dest = task_dir / name
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text(content)
-            (task_dir / "target.txt").write_text(f"BROKEN {task['id']}\n")
+            legacy = task_dir / "target.txt"
+            if legacy.exists():
+                legacy.unlink()
             written.append(task_dir / "task.json")
     return written
 

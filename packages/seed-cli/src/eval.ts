@@ -69,9 +69,7 @@ function applyReferenceRepair(dir: string): boolean {
     writeFileSync(join(dir, "answer.txt"), `symbol ${target[0] ?? "buried_symbol_definition"} defined at pkg/core.py\n`);
     return true;
   }
-  if (!existsSync(join(dir, "target.txt"))) return false;
-  writeFileSync(join(dir, "target.txt"), readFileSync(join(dir, "target.txt"), "utf8").replace("BROKEN", "FIXED"));
-  return true;
+  return false;
 }
 
 
@@ -183,7 +181,7 @@ export function smokeEval(root?: string): EvalResultSummary {
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort();
-  const withRepair = candidates.filter((d) => existsSync(join(generated, d, "pager.py")) || existsSync(join(generated, d, "symbols.py")) || existsSync(join(generated, d, "target.txt")));
+  const withRepair = candidates.filter((d) => ["pager.py", "symbols.py", "retry.py", "cli.py", "package.json", "TARGET_SYMBOL"].some((f) => existsSync(join(generated, d, f))));
   const dirs = (withRepair.length >= 2 ? withRepair : candidates).slice(0, 2);
   // trace:exempt reason=internal-detail
   const failures: string[] = [];

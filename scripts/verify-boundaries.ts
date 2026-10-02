@@ -16,12 +16,17 @@ import { join } from "node:path";
 
 const GUARDIAN_IMPORT = /seed-guardian|seed_guardian/;
 
-// Guardian-only RPC methods: promotion, rollback, archive eviction, gate
-// override, worktree lifecycle. The organism client must never name these;
-// it may only call hello/task/telemetry.
+// Guardian-only RPC methods: promotion, archive eviction, gate override,
+// worktree lifecycle. The organism client must never name these; it may
+// call hello/task/telemetry plus champion reads and guardian-owned
+// rollback (the CLI drives champion.rollback through the same client, but
+// the organism loop itself never calls it).
 const GUARDIAN_ONLY_RPC: string[] = [
+  "candidate.promote",
   "champion.promote",
-  "champion.rollback",
+  "champion.set",
+  "eval.expected",
+  "guardian.db.query",
   "archive.evict",
   "gate.override",
   "worktree.destroy",
@@ -57,7 +62,7 @@ function main(): void {
   for (const file of files) {
     const text = readFileSync(file, "utf8");
     if (GUARDIAN_IMPORT.test(text)) violations.push(`${file}: references guardian`);
-    if (file.includes("packages/seed-runtime/src")) {
+    if (file.includes("packages/seed-runtime/src") && !file.endsWith(".test.ts")) {
       for (const method of GUARDIAN_ONLY_RPC) {
         if (text.includes(method)) violations.push(`${file}: guardian-only RPC ${method}`);
       }

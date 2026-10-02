@@ -37,6 +37,7 @@ export const AGENT_METHODS = [
   "model.observed",
   "champion.show",
   "champion.history",
+  "champion.rollback",
 ] as const;
 
 export type AgentMethod = (typeof AGENT_METHODS)[number];

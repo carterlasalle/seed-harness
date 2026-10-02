@@ -100,10 +100,13 @@ def _oracle_rate(corpus: Path, ids: list[str]) -> float:
 def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1337) -> dict:
     """Run one propose/test/keep cycle; returns the result record and writes it."""
     if target not in ALLOWED_TARGETS:
-        raise ValueError(f"target must be one of {ALLOWED_TARGETS}, got {target!r}")
+        allowed = ", ".join(ALLOWED_TARGETS)
+        msg = f"unknown GEPA target {target!r} (allowed: {allowed})"
+        raise ValueError(msg)
     cases = load_cases(dataset)
     if not cases:
-        raise ValueError(f"no eval cases found in {dataset}")
+        msg = f"no eval cases found in {dataset}"
+        raise ValueError(msg)
     split = split_dataset(cases, seed=seed)
     train_ids = [c["id"] if isinstance(c, dict) else c.id for c in split.train]
     # Honest v1 scoring: run each val oracle.sh on a scratch copy so the
@@ -118,7 +121,9 @@ def optimize(target: str, dataset: str | Path, output: str | Path, seed: int = 1
     reflection = _reflect(target, failures)
     base_text = _read_target_text(target)
     candidate_text = _propose_edit(base_text, reflection)
-    kept = candidate_text != base_text and val_rate >= base_rate
+    # Keep only genuine change: identical text is never an improvement even
+    # when both rates tie (broken fixtures fail both pre-repair by design).
+    kept = candidate_text != base_text and val_rate > base_rate
     record = {
         "target": target,
         "seed": seed,

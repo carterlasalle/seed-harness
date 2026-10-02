@@ -12,7 +12,7 @@ import json
 import sys
 
 
-def serve(stdin=sys.stdin, stdout=sys.stdout):
+def serve(stdin=sys.stdin, stdout=sys.stdout):  # trace:exempt reason=fixture-untyped-stdio
     for raw in stdin:
         line = raw.strip()
         if not line:

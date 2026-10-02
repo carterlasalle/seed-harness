@@ -246,7 +246,7 @@ export async function main(argv: string[]): Promise<number> {
           // trace:exempt reason=internal-detail
           const reasonFlag = rest.indexOf("--reason");
           const reason = reasonFlag >= 0 ? rest.slice(reasonFlag + 1).join(" ") : "manual rollback";
-          emit(rollbackChampion(ref, reason));
+          emit(await rollbackChampion(ref, reason));
           return 0;
         }
         console.error("usage: seed champion <show|history|rollback REF>");

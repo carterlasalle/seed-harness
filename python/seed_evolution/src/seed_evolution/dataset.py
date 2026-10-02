@@ -67,7 +67,7 @@ def save_split(split: Split, path: str | Path) -> None:
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     # trace:exempt reason=internal-detail
-    def ids(items):
+    def ids(items) -> list:
         return [c["id"] if isinstance(c, dict) else c.id for c in items]
 
     out.write_text(
