@@ -32,6 +32,17 @@ jobs:
       - name: Install TS workspaces
         run: yarn install --immutable
 
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Corpus determinism (exactly 60 tasks, seed 1337)
+        run: uv run --project python/seed_evolution python scripts/generate-core-evals.py --seed 1337 --output evals/core/generated && test "$(find evals/core/generated -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 60
+
       - name: TS tests (110 node:test cases)
         run: yarn test
 
@@ -56,28 +67,17 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace
 
-      - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        run: pip install uv
-
       - name: Python sync (locked)
         run: uv sync --locked --project python/seed_evolution
 
       - name: Ruff
-        run: uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
+        run: uv run --project python/seed_evolution --with ruff ruff check python/seed_evolution scripts/generate-core-evals.py
 
       - name: Pyright
         run: uv run --project python/seed_evolution --with pyright pyright -p python/seed_evolution python/seed_evolution/src python/seed_evolution/tests
 
       - name: Pytest
         run: uv run --project python/seed_evolution pytest python/seed_evolution
-
-      - name: Corpus determinism (exactly 60 tasks, seed 1337)
-        run: uv run --project python/seed_evolution python scripts/generate-core-evals.py --seed 1337 --output evals/core/generated && test "$(find evals/core/generated -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 60
 
       - name: Eval smoke (fail-then-pass oracle contract)
         run: yarn seed eval smoke

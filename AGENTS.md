@@ -2729,7 +2729,7 @@ cargo test --workspace          # 19 guardian tests
 ```sh
 yarn lint
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
-uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
+uv run --project python/seed_evolution --with ruff ruff check python/seed_evolution scripts/generate-core-evals.py
 ```
 
 ### Typecheck
