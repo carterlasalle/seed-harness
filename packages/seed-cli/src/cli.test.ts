@@ -105,8 +105,8 @@ test("evolve queue/status/run drains through runTask", async () => {
 test("champion rollback preserves history", async () => {
   isolate();
   const before = (await showChampion()).ref;
-  assert.throws(() => rollbackChampion("challenger@v2", "test rollback"), /previously valid champion/);
-  const moved = rollbackChampion(before, "restore");
+  await assert.rejects(() => rollbackChampion("challenger@v2", "test rollback"), /previously valid champion/);
+  const moved = await rollbackChampion(before, "restore");
   assert.equal(moved.ref, before);
   assert.ok(moved.history.length >= 2);
 });

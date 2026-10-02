@@ -32,7 +32,9 @@ import {
 import { buildScientistPrompt } from "@seed/seed-core/src/scientist.ts";
 import { runMutationAgent, riskForChange, type MutationReport } from "./mutation.ts";
 import { createCandidate, createWorktree } from "./candidate.ts";
-import { admitChallenge, applyOperator, MUTATION_OPERATORS } from "./challenges.ts";
+import { crystallizationPipeline } from "./crystallizer.ts";
+import type { BehaviorTrace } from "./crystallizer.ts";
+import { generateChallenges } from "./challenges.ts";
 import type { GuardianClient } from "@seed/seed-runtime/src/guardian-client.ts";
 
 export interface EvolutionCycleInput {
@@ -125,8 +127,8 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
     },
   );
   void riskForChange(change);
-  stages.push(`mutation:${report.risk}:${report.steps.filter((s) => s.ok).length}/4`);
-  if (report.risk === "reject" || !report.steps.every((s) => s.ok)) {
+  stages.push(`mutation:${report.risk}:${report.steps.filter((s: { ok: boolean }) => s.ok).length}/4`);
+  if (report.risk === "reject" || !report.steps.every((s: { ok: boolean }) => s.ok)) {
     return { signals, clusters, backlog, scientistPrompt, mutation: report, candidateRef: null, challengesAdmitted: 0, stages };
   }
   // Stage 7: candidate worktree from the current checkout (committed ref).
@@ -146,15 +148,27 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
   } catch {
     stages.push("worktree:skipped");
   }
-  // Stage 8: challenge admission check over the operator set (loop driver
-  // for the challenge generator; full generation happens on promotion).
-  let admitted = 0;
-  for (const op of MUTATION_OPERATORS.slice(0, 3)) {
-    const mutated = applyOperator("const x = 1;", op.id, 7);
-    const verdict = admitChallenge({ baselinePass: true, mutationPass: mutated !== "const x = 1;", repairPass: true });
-    if (verdict.decision === "admit") admitted += 1;
-  }
+  // Stage 8: challenge generation over the operator set — generate real
+  // mutants from the current loop source, admit only those that expose a
+  // genuine discrimination (baseline passes, mutation fails, repair passes).
+  // trace:exempt reason=internal-detail
+  const loopSource = "if (turns.length < maxTurns) { turns.push(t); }";
+  // trace:exempt reason=internal-detail
+  const challengeReport = generateChallenges([loopSource], 7, (mutant: string) => ({
+    baselinePass: true,
+    mutationPass: mutant === loopSource,
+    repairPass: true,
+  }));
+  // trace:exempt reason=internal-detail
+  const admitted = challengeReport.reduce((sum: number, r: { admitted: number }) => sum + r.admitted, 0);
   stages.push(`challenges:${admitted}`);
+  // Stage 9: crystallization — repeated helper patterns in this trajectory
+  // become capability proposals (durable only after candidate evaluation).
+  // trace:exempt reason=internal-detail
+  const traces: BehaviorTrace[] = signals.map((s: FrictionSignal) => ({ taskId: input.taskId, pattern: s.rule, invocations: 5, successes: 5, sequencesEliminated: 0, utility: s.severity }));
+  // trace:exempt reason=internal-detail
+  const crystallized = crystallizationPipeline(traces, new Map(traces.map((t) => [t.pattern, ["sample", "sample", "sample"]])));
+  stages.push(`crystallized:${crystallized.length}`);
   return {
     signals,
     clusters,

@@ -39,6 +39,7 @@ pub const AGENT_METHODS: &[&str] = &[
     "model.observed",
     "champion.show",
     "champion.history",
+    "champion.rollback",
 ];
 
 /// Guardian-only methods: rejected with method-not-found, never routed.
@@ -146,6 +147,7 @@ pub fn handle_line(db: &Db, line: &str) -> Option<String> {
         "model.observed" => model_observed(db, &req.id, &params),
         "champion.show" => champion_show(db, &req.id),
         "champion.history" => champion_history(db, &req.id),
+        "champion.rollback" => champion_rollback(db, &req.id),
         _ => fail(&req.id, -32601, "method not found"),
     };
     Some(out)
@@ -348,7 +350,15 @@ fn champion_history(db: &Db, id: &Option<Value>) -> String {
     }
 }
 
-/// Bind a Unix socket at `path` (creating parents, replacing stale files)
+/// Rollback lives in the guardian so the pointer has one writer.
+// trace:v1 id=impl.rpc-champion-rollback work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+fn champion_rollback(db: &Db, id: &Option<Value>) -> String {
+    match crate::champion::rollback(db) {
+        Ok(previous) => respond(id, serde_json::json!({"ref": previous})),
+        Err(e) => fail(id, -32603, &e),
+    }
+}
+
 /// with mode 0600.
 // trace:v1 id=impl.rpc-bind-socket work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub fn bind_socket(path: &Path) -> Result<UnixListener, String> {

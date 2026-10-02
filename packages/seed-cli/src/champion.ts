@@ -59,19 +59,35 @@ export async function championHistory(root?: string): Promise<ChampionPointer["h
 }
 
 // trace:v1 id=impl.cli-champion-rollback work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
-export function rollbackChampion(ref: string, reason: string, root?: string): ChampionPointer {
+export async function rollbackChampion(ref: string, reason: string, root?: string): Promise<ChampionPointer> {
   if (!ref) throw new Error("rollback needs a ref");
-  const pointer = loadChampion(root);
-  const at = new Date().toISOString();
-  if (!pointer.history.some((h) => h.ref === ref)) {
-    throw new Error(
-      `rollback target ${JSON.stringify(ref)} is not a previously valid champion (budget: rollback, limit: history refs, requested: ${ref})`,
-    );
+  try {
+    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
+    const result = (await client.call("champion.rollback", {})) as { ref?: unknown };
+    client.close();
+    if (typeof result?.ref !== "string" || result.ref.length === 0) throw new Error("guardian rollback returned no ref");
+    const pointer = loadChampion(root);
+    const at = new Date().toISOString();
+    pointer.history.push({ ref: pointer.ref, at, reason: `rollback to ${result.ref}: ${reason}` });
+    pointer.ref = result.ref;
+    pointer.updatedAt = at;
+    // trace:exempt reason=internal-detail
+    saveChampion(pointer, root);
+    return pointer;
+  } catch (error) {
+    if (error instanceof Error && /rollback needs|previous champion|at least two/.test(error.message)) throw error;
+    const pointer = loadChampion(root);
+    const at = new Date().toISOString();
+    if (!pointer.history.some((h) => h.ref === ref)) {
+      throw new Error(
+        `rollback target ${JSON.stringify(ref)} is not a previously valid champion (budget: rollback, limit: history refs, requested: ${ref})`,
+      );
+    }
+    pointer.history.push({ ref: pointer.ref, at, reason: `rollback to ${ref}: ${reason}` });
+    pointer.ref = ref;
+    pointer.updatedAt = at;
+    // trace:exempt reason=internal-detail
+    saveChampion(pointer, root);
+    return pointer;
   }
-  pointer.history.push({ ref: pointer.ref, at, reason: `rollback to ${ref}: ${reason}` });
-  pointer.ref = ref;
-  pointer.updatedAt = at;
-  // trace:exempt reason=internal-detail
-  saveChampion(pointer, root);
-  return pointer;
 }

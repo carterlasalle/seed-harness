@@ -52,3 +52,4 @@ def test_cli_help_and_optimize_cycle(tmp_path):
     # rate is 0.0 (never a hardcoded 1.0) and a tie is not kept.
     assert record["valPassRate"] == 0.0
     assert record["basePassRate"] == 0.0
+    assert record["kept"] is False

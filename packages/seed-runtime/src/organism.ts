@@ -214,8 +214,11 @@ export async function runTurn(
   sink?.(event);
   void client.call("telemetry.append", event).catch(() => undefined);
   // trace:exempt reason=internal-detail
-  if (ephemeral && turn.prompt.startsWith("ephemeral:")) {
-    const id = turn.prompt.slice("ephemeral:".length).trim() || `turn-${task.toolCalls.length}`;
+  if (ephemeral) {
+    // trace:exempt reason=internal-detail
+    const id = turn.prompt.startsWith("ephemeral:")
+      ? turn.prompt.slice("ephemeral:".length).trim() || `turn-${task.toolCalls.length}`
+      : `turn-${task.toolCalls.length}-${Buffer.from(turn.code).toString("hex").slice(0, 8)}`;
     let known = true;
     try {
       ephemeral.read(id);

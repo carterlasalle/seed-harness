@@ -48,7 +48,8 @@ class EvalCase:
         known = {"id", "category", "repoFixture", "prompt", "oracleCommand", "timeoutMs", "network"}
         unknown = set(raw) - known
         if unknown:
-            raise ValueError(f"unknown EvalCase keys: {sorted(unknown)}")
+            msg = f"unknown EvalCase keys: {sorted(unknown)}"
+            raise ValueError(msg)
         return EvalCase(
             id=str(raw["id"]),
             category=str(raw["category"]),

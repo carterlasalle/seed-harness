@@ -47,6 +47,7 @@ def _store_scalar(current: dict, block_key: str | None, raw_line: str, stripped:
     if key == "implementationIdeas" and isinstance(current.get(key), str):
         current[key] = [current[key]]
 
+
 # trace:v1 id=impl.py-mechanism-parse work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 def _parse_simple_yaml(text: str) -> list[dict]:
     """Parse the restricted catalog shape: `- ` entries, `key: value` lines, `|` blocks, `[a, b]` flows."""
