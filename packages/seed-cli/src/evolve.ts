@@ -9,9 +9,9 @@
 // unbounded; statuses reflect stored state only. Public functions/types:
 // EvolveStatus, queueExperiment, evolveStatus, evolveRun.
 
-import { loadQueue, recentRuns, saveQueue } from "./state.ts";
+import { listEvalResults, loadQueue, recentRuns, saveQueue } from "./state.ts";
+import { compareEvals } from "./eval.ts";
 import { runTask } from "./run.ts";
-
 export interface EvolveStatus {
   queued: number;
   recent: number;
@@ -51,5 +51,19 @@ export async function evolveRun(limit: number, root?: string): Promise<{ ran: nu
     const record = await runTask(task, { root });
     if (record.ok) ok += 1;
   }
+  // Promotion readiness uses the same non-inferiority rule the guardian
+  // enforces, surfaced here instead of only draining tasks.
+  // trace:exempt reason=internal-detail
+  void tryPromotionCheck(root);
   return { ran: batch.length, ok };
+}
+
+// trace:v1 id=impl.cli-evolve-promotion work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-JJ5Q1072
+export function tryPromotionCheck(root?: string): { ready: boolean; detail: string } | null {
+  // trace:exempt reason=internal-detail
+  const results = listEvalResults(root);
+  if (results.length < 2) return null;
+  // trace:exempt reason=internal-detail
+  const verdict = compareEvals(results[results.length - 2]!, results[results.length - 1]!);
+  return { ready: verdict.nonInferior, detail: verdict.detail };
 }

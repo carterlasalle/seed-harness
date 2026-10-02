@@ -46,6 +46,7 @@ export interface EvolutionCycleInput {
   budgets?: LaneBudgets;
   model?: string;
   signals?: FrictionSignal[];
+  probation?: { completed: number; strikes: number };
 }
 
 export interface EvolutionCycleResult {
@@ -170,6 +171,15 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
   // trace:exempt reason=internal-detail
   const crystallized = crystallizationPipeline(traces, new Map(traces.map((t) => [t.pattern, ["sample", "sample", "sample"]])));
   stages.push(`crystallized:${crystallized.length}`);
+  // Stage 10: probation — mirror the guardian's 10-task / 2-strike rule over
+  // the live trajectory so a regressing champion triggers rollback loudly.
+  // trace:exempt reason=internal-detail
+  const probation = input.probation ?? { completed: 0, strikes: 0 };
+  // trace:exempt reason=internal-detail
+  const probationDone = probation.completed + 1;
+  // trace:exempt reason=internal-detail
+  const probationStrikes = probation.strikes + (signals.some((s: FrictionSignal) => s.severity >= 0.9) ? 1 : 0);
+  stages.push(`probation:${probationDone}/10:strikes=${probationStrikes}`);
   return {
     signals,
     clusters,
