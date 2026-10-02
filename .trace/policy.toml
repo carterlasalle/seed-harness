@@ -90,5 +90,8 @@ paths = [
   "packages/seed-runtime/src/index.ts",
   "python/seed_evolution/tests/**",
   "python/seed_evolution/**/*.egg-info",
+  "bughunt.toml",
+  ".bughunt/**",
+  ".pyre_configuration",
 ]
 extensions = []
