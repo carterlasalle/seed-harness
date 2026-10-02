@@ -55,6 +55,7 @@ export interface AgentLoopOptions {
   maxTurns?: number;
   systemPrompt?: string;
   skills?: { id: string; description: string }[];
+  hooks?: { event: string; payload: (info: { index: number; text: string; ok: boolean }) => unknown }[];
   onTurn?: (turn: AgentLoopTurn) => void;
 }
 
@@ -283,9 +284,17 @@ export async function runAgentLoop(
   let summary = "";
   for (let index = 0; index < maxTurns && !done; index += 1) {
     // trace:exempt reason=internal-detail
+    for (const hook of options?.hooks ?? []) {
+      if (hook.event === "before_model") hook.payload({ index, text: "", ok: true });
+    }
+    // trace:exempt reason=internal-detail
     const turn = await completeModelTurn({ model, system, messages: history });
     // trace:exempt reason=internal-detail
     emit(toEvent(task, "model.request", { model, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens }));
+    // trace:exempt reason=internal-detail
+    for (const hook of options?.hooks ?? []) {
+      if (hook.event === "after_model") hook.payload({ index, text: turn.text, ok: true });
+    }
     if (!turn.toolCall) {
       // trace:exempt reason=internal-detail
       const match = /DONE:\s*(.+)/.exec(turn.text);

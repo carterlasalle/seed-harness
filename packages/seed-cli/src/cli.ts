@@ -272,11 +272,17 @@ export async function main(argv: string[]): Promise<number> {
       case "research": {
         // trace:exempt reason=internal-detail
         if (sub === "refresh" || !sub) {
+          if (rest.includes("--live")) {
+            const { refreshResearchLive } = await import("./research.ts");
+            const report = await refreshResearchLive({ github: [{ owner: "earendil-works", repo: "pi" }], arxiv: [] });
+            emit(report.ok ? report.output : `FAILED\n${report.output}`);
+            return report.ok ? 0 : 1;
+          }
           const report = refreshResearch();
           emit(report.ok ? report.output : `FAILED\n${report.output}`);
           return report.ok ? 0 : 1;
         }
-        console.error("usage: seed research refresh");
+        console.error("usage: seed research refresh [--live]");
         return 1;
       }
       case "help":

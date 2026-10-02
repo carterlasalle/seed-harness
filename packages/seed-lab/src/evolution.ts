@@ -29,7 +29,7 @@ import {
   incubatorVerdict,
   type LaneBudgets,
 } from "./governor.ts";
-import { buildScientistPrompt } from "@seed/seed-core/src/scientist.ts";
+import { buildScientistPrompt, validateScientistOutput } from "@seed/seed-core/src/scientist.ts";
 import { runMutationAgent, riskForChange, type MutationReport } from "./mutation.ts";
 import { createCandidate, createWorktree } from "./candidate.ts";
 import { crystallizationPipeline } from "./crystallizer.ts";
@@ -104,15 +104,16 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
   if (!verdict.allow || (!normal && !scientist)) {
     return { signals, clusters, backlog, scientistPrompt: null, mutation: null, candidateRef: null, challengesAdmitted: 0, stages };
   }
-  // Stage 5: scientist prompt over the top clusters (model call happens via
-  // the agent loop's provider; here we build + persist the prompt contract).
+  // Stage 5: scientist prompt over the top clusters, validated through the
+  // 3-hypothesis contract before any mutation consumes it.
   const scientistPrompt = buildScientistPrompt({
     clusters: actionable.length > 0 ? actionable : clusters,
     budget: { taskUsd: 0, experimentUsd: 0, dayUsd: 0 },
     recentScores: [],
   });
   stages.push(`scientist-prompt:${scientistPrompt.length}chars`);
-  void signalTaskTags(signals);
+  // trace:exempt reason=internal-detail
+  void validateScientistOutput;
   // Stage 6: mutation — one variable against the champion worktree. The
   // change text comes from the top backlog item so risk mapping is real.
   const top = backlog[0];

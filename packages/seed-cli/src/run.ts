@@ -79,7 +79,7 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
     // trace:exempt reason=internal-detail
     const pinned = organism.hello.champion_sha || champion.ref;
     // trace:exempt reason=internal-detail
-    const loop = await organism.runAgentLoop({ maxTurns: options.maxTurns ?? 12, model: options.model, skills: cards.map((c) => ({ id: c.id, description: c.description })) });
+    const loop = await organism.runAgentLoop({ maxTurns: options.maxTurns ?? 12, model: options.model, skills: cards.map((c) => ({ id: c.id, description: c.description })), hooks: [{ event: "before_model", payload: ({ index }: { index: number; text: string; ok: boolean }) => `turn-${index}-before` }, { event: "after_model", payload: ({ index, text }: { index: number; text: string; ok: boolean }) => `turn-${index}:${text.slice(0, 40)}` }] });
     await organism.end(loop.turns.length > 0 && loop.done ? "done" : "failed", loop.summary.slice(0, 500) || trimmed.slice(0, 500));
     // trace:exempt reason=internal-detail
     const turnNote = `agent-turns=${loop.turns.length}`;

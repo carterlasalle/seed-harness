@@ -64,6 +64,16 @@ export const SCIENTIST_CLASSES: readonly HypothesisClass[] = [
 // trace:exempt reason=internal-detail
 export const SCIENTIST_MAX_STATEMENT_SIMILARITY = 0.8;
 
+// trace:v1 id=impl.sc-scientist-call work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
+export async function runScientistModel(
+  prompt: string,
+  callModel: (prompt: string) => Promise<unknown>,
+): Promise<{ output: ScientistOutput; raw: unknown }> {
+  // trace:exempt reason=internal-detail
+  const raw = await callModel(prompt);
+  return { output: validateScientistOutput(raw), raw };
+}
+
 // trace:v1 id=impl.sc-scientist-error work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-D5V8QCMS
 export class ScientistOutputError extends Error {
   readonly issues: string[];
