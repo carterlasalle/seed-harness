@@ -71,7 +71,7 @@ jobs:
         run: uv sync --locked --project python/seed_evolution
 
       - name: Ruff
-        run: uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
+        run: uv run --project python/seed_evolution --with ruff ruff check python/seed_evolution scripts/generate-core-evals.py
 
       - name: Pyright
         run: uv run --project python/seed_evolution --with pyright pyright -p python/seed_evolution python/seed_evolution/src python/seed_evolution/tests
