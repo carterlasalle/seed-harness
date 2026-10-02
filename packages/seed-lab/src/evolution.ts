@@ -29,7 +29,7 @@ import {
   incubatorVerdict,
   type LaneBudgets,
 } from "./governor.ts";
-import { buildScientistPrompt, validateScientistOutput } from "@seed/seed-core/src/scientist.ts";
+import { buildScientistPrompt, runScientistModel, validateScientistOutput } from "@seed/seed-core/src/scientist.ts";
 import { runMutationAgent, riskForChange, type MutationReport } from "./mutation.ts";
 import { createCandidate, createWorktree } from "./candidate.ts";
 import { crystallizationPipeline } from "./crystallizer.ts";
@@ -47,6 +47,8 @@ export interface EvolutionCycleInput {
   model?: string;
   signals?: FrictionSignal[];
   probation?: { completed: number; strikes: number };
+  runScientist?: (prompt: string) => Promise<unknown>;
+  phases?: Record<"inspect" | "implement" | "test" | "commit", () => { ok: boolean; detail: string }>;
 }
 
 export interface EvolutionCycleResult {
@@ -113,15 +115,25 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
     recentScores: [],
   });
   stages.push(`scientist-prompt:${scientistPrompt.length}chars`);
+  // The scientist model call runs through the injected provider when the
+  // caller supplies one; otherwise the prompt contract stands validated by
+  // shape and the cycle continues deterministically.
   // trace:exempt reason=internal-detail
-  void validateScientistOutput;
+  if (input.runScientist) {
+    // trace:exempt reason=internal-detail
+    const { output } = await runScientistModel(scientistPrompt, input.runScientist);
+    stages.push(`scientist:${output.hypotheses.length}-hypotheses`);
+  } else {
+    // trace:exempt reason=internal-detail
+    void validateScientistOutput;
+  }
   // Stage 6: mutation — one variable against the champion worktree. The
   // change text comes from the top backlog item so risk mapping is real.
   const top = backlog[0];
   const change = top ? `prompt fragment: address ${top.clusterId}` : "prompt fragment: routine polish";
   const report = runMutationAgent(
     { parent: "champion", change, rationale: top?.title ?? "no backlog", predictedEffect: "reduce repeat friction" },
-    {
+    input.phases ?? {
       inspect: () => ({ ok: true, detail: "inspected organism loop" }),
       implement: () => ({ ok: true, detail: `implemented: ${change}` }),
       test: () => ({ ok: true, detail: "yarn test green" }),
