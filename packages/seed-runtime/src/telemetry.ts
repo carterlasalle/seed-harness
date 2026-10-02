@@ -13,8 +13,8 @@
 // TaskTelemetry, TaskStatus, TelemetrySink, createTaskTelemetry,
 // recordToolCall, finishTask, toEvent, toolCallEvent.
 
-// trace:exempt reason=internal-detail
-export type EvidenceLevel = "observed" | "replay" | "oracle" | "holdout";
+// trace:v1 id=impl.rt-evidence-levels work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+export type EvidenceLevel = "guardian" | "external-oracle" | "provider" | "organism" | "model-judged";
 
 // trace:exempt reason=internal-detail
 export interface SeedEvent {

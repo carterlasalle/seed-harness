@@ -2818,7 +2818,7 @@ See `DESIGN.md`. CLI stdio only, no browser bundle; doctor output is
 ## Test topology
 
 Co-located suites: `packages/*/src/*.test.ts` via
-`node --test "packages/*/src/**/*.test.ts"` (108 cases); single file via
+`node --test "packages/*/src/**/*.test.ts"` (110 cases); single file via
 `node --test <path>`; `python/seed_evolution/tests/test_*.py` via
 `uv run --project python/seed_evolution pytest` (15 cases);
 `crates/seed-guardian/tests/*.rs` via `cargo test -p seed-guardian`
@@ -3004,6 +3004,9 @@ outside the repo (`~/.seed` default).
   test via env.
 - Small kernel first: echo probe + repair-marker oracles prove the loop
   without faking a model; grow graders only when a real consumer needs them.
+- Spec enums are exact: §39 evidence is guardian/external-oracle/provider/
+  organism/model-judged (not observed/replay/oracle/holdout); run detail
+  carries a `friction=` marker from detectFriction post-task.
 
 ---
 

@@ -94,7 +94,7 @@ export async function main(argv: string[]): Promise<number> {
         // trace:exempt reason=internal-detail
         const prompt = args.slice(1).join(" ");
         const record = await runTask(prompt, {});
-        emit(record.ok ? `ok ${record.id} champion=${record.detail.split(" ")[0]}` : `failed ${record.id}: ${record.detail}`);
+        emit(record.ok ? `ok ${record.id} ${record.detail.split(" ")[0]}` : `failed ${record.id}: ${record.detail}`);
         return record.ok ? 0 : 1;
       }
       case "status": {

@@ -20,6 +20,8 @@ import { callEcho, discoverCapabilities } from "./capabilities.ts";
 import { selectTools } from "@seed/seed-core/src/router.ts";
 import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
 import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
+import { detectFriction } from "@seed/seed-core/src/friction.ts";
+import type { FrictionObservation } from "@seed/seed-core/src/friction.ts";
 export interface RunOptions {
   capabilities?: string[];
   session?: string;
@@ -64,8 +66,9 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
   try {
     // Day-1 turn through the real organism: one python execution with
     // telemetry, then the echo probe as the observable completion.
-    // trace:exempt reason=internal-detail
+    // post-task: real organism turn, then friction extraction over the turn.
     let turnNote = "noguardian";
+    let frictionNote = "friction=none";
     try {
       // trace:exempt reason=internal-detail
       const socketPath = `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
@@ -82,8 +85,15 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
       });
       await organism.end(turn.ok ? "done" : "failed", turn.stdout.slice(0, 500));
       turnNote = turn.ok ? "python-ok" : "python-failed";
+      // trace:exempt reason=internal-detail
+      const observations: FrictionObservation[] = [
+        { turn: 1, kind: "tool", tool: "python", status: turn.ok ? "ok" : "error" },
+      ];
+      const signals = detectFriction(observations);
+      frictionNote = signals.length === 0 ? "friction=none" : `friction=${signals.map((s) => s.rule).join("+")}`;
     } catch {
       turnNote = "noguardian";
+      frictionNote = "friction=none";
     }
     // trace:exempt reason=internal-detail
     const echoed = callEcho({ prompt: trimmed, session, champion: champion.ref }, root);
@@ -95,7 +105,7 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
       prompt: trimmed,
       capabilities: picked,
       ok: true,
-      detail: `champion=${champion.ref} caps=[${picked.join(",")}] ${turnNote} echo=${JSON.stringify(echoed).slice(0, 120)}`,
+      detail: `champion=${champion.ref} caps=[${picked.join(",")}] ${turnNote} ${frictionNote} echo=${JSON.stringify(echoed).slice(0, 120)}`,
     };
     // trace:exempt reason=internal-detail
     recordRun(record, root);

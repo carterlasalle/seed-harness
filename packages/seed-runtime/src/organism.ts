@@ -172,7 +172,7 @@ export async function runTurn(
     elapsedMs: result.elapsed_ms,
     outputBytes: Buffer.byteLength(result.stdout) + Buffer.byteLength(result.stderr),
     truncated: result.stdout_truncated || result.stderr_truncated,
-    evidence: turn.evidence ?? "observed",
+    evidence: turn.evidence ?? "organism",
     timestamp: new Date().toISOString(),
   };
   // trace:exempt reason=internal-detail

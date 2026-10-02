@@ -148,7 +148,7 @@ test("telemetry defaults oracleAccuracy null and tracks tool calls", () => {
   assert.equal(task.status, "running");
   recordToolCall(task, {
     tool: "python", session: "sess-1", taskId: "task-1", ok: true,
-    elapsedMs: 5, outputBytes: 10, truncated: false, evidence: "observed",
+    elapsedMs: 5, outputBytes: 10, truncated: false, evidence: "organism",
     timestamp: new Date().toISOString(),
   });
   finishTask(task, "done");
