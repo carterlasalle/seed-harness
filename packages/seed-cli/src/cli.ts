@@ -37,6 +37,7 @@ export const COMMANDS = [
   "eval smoke",
   "model list",
   "model profile <name>",
+  "model probe [model]",
   "champion show",
   "champion history",
   "champion rollback <ref> [--reason TEXT]",
@@ -64,6 +65,7 @@ commands:
   eval smoke                      fast 2-task subset for CI
   model list                      list model profiles
   model profile <name>            show one model profile
+  model probe [model]             probe a model and persist its profile
   champion show                   show champion pointer
   champion history                show champion history
   champion rollback <ref>         rollback champion to ref
@@ -223,7 +225,21 @@ export async function main(argv: string[]): Promise<number> {
           emit(found);
           return 0;
         }
-        console.error("usage: seed model <list|profile NAME>");
+        if (sub === "probe") {
+          const { probeModel } = await import("./models.ts");
+          const { completeModelTurn } = await import("@seed/seed-runtime/src/model-client.ts");
+          const name = rest[0] ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4";
+          const record = await probeModel(name, async (prompt, model) => {
+            // trace:exempt reason=internal-detail
+            const startedAt = Date.now();
+            // trace:exempt reason=internal-detail
+            const turn = await completeModelTurn({ model, system: prompt, messages: [{ role: "user", content: prompt }] });
+            return { success: turn.text.length > 0, latencyMs: Date.now() - startedAt, tokens: turn.inputTokens + turn.outputTokens, costUsd: 0 };
+          });
+          emit(record);
+          return 0;
+        }
+        console.error("usage: seed model <list|profile NAME|probe [MODEL]>");
         return 1;
       }
       case "champion": {

@@ -50,6 +50,7 @@ test("help lists all commands", async () => {
     "eval smoke",
     "model list",
     "model profile <name>",
+    "model probe [model]",
     "champion show",
     "champion history",
     "champion rollback <ref> [--reason TEXT]",
