@@ -1,7 +1,7 @@
 {
   "$comment": "Package @seed-cli. Purpose: workspace member manifest. Why: separate installable unit under packages/*. Invariant: private, type module, test via node --test. trace:v1 id=impl.pkg-seed-cli work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85",
   "name": "@carterlasalle/seed-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "test": "node --test",
@@ -10,8 +10,7 @@
   },
   "license": "Apache-2.0",
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "bin": {
     "seed": "dist/cli.js"
@@ -23,5 +22,10 @@
   ],
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@carterlasalle/seed-core": "0.1.2",
+    "@carterlasalle/seed-lab": "0.1.2",
+    "@carterlasalle/seed-runtime": "0.1.2"
   }
 }
