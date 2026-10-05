@@ -31,7 +31,7 @@ export async function probeModel(
   runPrompt: (prompt: string, model: string) => Promise<{ success: boolean; latencyMs: number; tokens: number; costUsd: number }>,
   root?: string,
 ): Promise<ModelProfile> {
-  const { runLiveModelProbes } = await import("@carterlasalle/seed-lab/src/model-profiler.ts");
+  const { runLiveModelProbes } = await import("@carterlasalle/seed-lab/dist/model-profiler.js");
   // trace:exempt reason=internal-detail
   const { profile } = await runLiveModelProbes(name, runPrompt);
   const { saveModels } = await import("./state.ts");

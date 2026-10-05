@@ -21,7 +21,7 @@ import {
   type SelectedTool,
   type ToolCard,
   type ToolSelectionContext,
-} from "@carterlasalle/seed-core/src/router.ts";
+} from "@carterlasalle/seed-core/dist/router.js";
 
 export {
   DEFAULT_MAX_VISIBLE_TOOLS,

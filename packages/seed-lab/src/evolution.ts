@@ -18,9 +18,9 @@
 // record_promotion math mirrored through guardian RPC + local pointer.
 // Public types/functions: EvolutionCycleInput, EvolutionCycleResult,
 // runEvolutionCycle.
-import { detectFriction, type FrictionObservation, type FrictionSignal } from "@carterlasalle/seed-core/src/friction.ts";
-import { clusterFriction, type FrictionCluster } from "@carterlasalle/seed-core/src/cluster.ts";
-import { createBacklogItem, type BacklogItem } from "@carterlasalle/seed-core/src/backlog.ts";
+import { detectFriction, type FrictionObservation, type FrictionSignal } from "@carterlasalle/seed-core/dist/friction.js";
+import { clusterFriction, type FrictionCluster } from "@carterlasalle/seed-core/dist/cluster.js";
+import { createBacklogItem, type BacklogItem } from "@carterlasalle/seed-core/dist/backlog.js";
 import {
   freshBudgets,
   normalDue,
@@ -29,13 +29,13 @@ import {
   incubatorVerdict,
   type LaneBudgets,
 } from "./governor.ts";
-import { buildScientistPrompt, runScientistModel, validateScientistOutput } from "@carterlasalle/seed-core/src/scientist.ts";
+import { buildScientistPrompt, runScientistModel, validateScientistOutput } from "@carterlasalle/seed-core/dist/scientist.js";
 import { runMutationAgent, riskForChange, type MutationReport } from "./mutation.ts";
 import { createCandidate, createWorktree } from "./candidate.ts";
 import { crystallizationPipeline } from "./crystallizer.ts";
 import type { BehaviorTrace } from "./crystallizer.ts";
 import { generateChallenges } from "./challenges.ts";
-import type { GuardianClient } from "@carterlasalle/seed-runtime/src/guardian-client.ts";
+import type { GuardianClient } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
 
 export interface EvolutionCycleInput {
   client: GuardianClient;

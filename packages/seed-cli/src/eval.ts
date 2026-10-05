@@ -16,8 +16,8 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { indexEvalResult, listEvalResults, saveEvalResult, seedRoot } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
-import { runOrganismTask } from "@carterlasalle/seed-runtime/src/organism.ts";
-import { connectGuardian } from "@carterlasalle/seed-runtime/src/guardian-client.ts";
+import { runOrganismTask } from "@carterlasalle/seed-runtime/dist/organism.js";
+import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
 
 export interface EvalRunOptions {
   limit?: number;

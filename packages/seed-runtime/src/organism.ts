@@ -22,8 +22,8 @@ import { createSession, type SeedSession } from "./session.ts";
 import { runPython } from "./python-tool.ts";
 import { createEphemeralStore, type EphemeralStore } from "./ephemeral.ts";
 import { completeModelTurn } from "./model-client.ts";
-import type { ModelProfile } from "@carterlasalle/seed-core/src/model-policy.ts";
-import { resolveModelPolicy } from "@carterlasalle/seed-core/src/model-policy.ts";
+import type { ModelProfile } from "@carterlasalle/seed-core/dist/model-policy.js";
+import { resolveModelPolicy } from "@carterlasalle/seed-core/dist/model-policy.js";
 import {
   createTaskTelemetry,
   finishTask,
