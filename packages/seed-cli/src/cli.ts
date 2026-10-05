@@ -227,7 +227,7 @@ export async function main(argv: string[]): Promise<number> {
         }
         if (sub === "probe") {
           const { probeModel } = await import("./models.ts");
-          const { completeModelTurn } = await import("@carterlasalle/seed-runtime/src/model-client.ts");
+          const { completeModelTurn } = await import("@carterlasalle/seed-runtime/dist/model-client.js");
           const name = rest[0] ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4";
           const record = await probeModel(name, async (prompt, model) => {
             // trace:exempt reason=internal-detail
