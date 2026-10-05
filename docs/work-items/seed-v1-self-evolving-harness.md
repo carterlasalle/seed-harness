@@ -4,7 +4,7 @@
 
 ## Status
 
-Active
+Shipped (PRs #6-#13 merged: real model loop, per-category fixtures, evolution pipeline, guardian rollback, probes, replay, hooks, live refresh, scientist/mutation execution, promotion + probation wiring).
 
 ## Summary
 
@@ -38,4 +38,4 @@ SPEC-SEED-XK673WRX
 
 ## Progress
 
-Work started.
+Done. All six requirements implemented, verified, and merged to main.
