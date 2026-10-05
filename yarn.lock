@@ -8,6 +8,8 @@ __metadata:
 "@carterlasalle/seed-cli@workspace:packages/seed-cli":
   version: 0.0.0-use.local
   resolution: "@carterlasalle/seed-cli@workspace:packages/seed-cli"
+  bin:
+    seed: dist/cli.js
   languageName: unknown
   linkType: soft
 
