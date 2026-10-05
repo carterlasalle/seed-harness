@@ -227,7 +227,7 @@ export async function main(argv: string[]): Promise<number> {
         }
         if (sub === "probe") {
           const { probeModel } = await import("./models.ts");
-          const { completeModelTurn } = await import("@seed/seed-runtime/src/model-client.ts");
+          const { completeModelTurn } = await import("@carterlasalle/seed-runtime/src/model-client.ts");
           const name = rest[0] ?? process.env.SEED_MODEL ?? "anthropic/claude-sonnet-4";
           const record = await probeModel(name, async (prompt, model) => {
             // trace:exempt reason=internal-detail
@@ -320,7 +320,7 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 // trace:exempt reason=internal-detail
-const invoked = process.argv[1] !== undefined && /packages\/seed-cli\/src\/cli\.ts$/.test(process.argv[1]);
+const invoked = process.argv[1] !== undefined && /packages\/seed-cli\/(src\/cli\.ts|dist\/cli\.js)$/.test(process.argv[1]);
 if (invoked) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),

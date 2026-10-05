@@ -13,7 +13,7 @@
 
 import { loadChampion, saveChampion } from "./state.ts";
 import type { ChampionPointer } from "./state.ts";
-import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
+import { connectGuardian } from "@carterlasalle/seed-runtime/src/guardian-client.ts";
 
 // trace:exempt reason=internal-detail
 function socketPath(): string {

@@ -14,12 +14,12 @@
 import { appendJsonl, loadChampion, recentRuns, recordRun, stateDir } from "./state.ts";
 import type { RunRecord } from "./state.ts";
 import { discoverCapabilities } from "./capabilities.ts";
-import { selectTools } from "@seed/seed-core/src/router.ts";
-import { runOrganismTask } from "@seed/seed-runtime/src/organism.ts";
-import { connectGuardian } from "@seed/seed-runtime/src/guardian-client.ts";
-import { detectFriction } from "@seed/seed-core/src/friction.ts";
-import type { FrictionObservation } from "@seed/seed-core/src/friction.ts";
-import { runEvolutionCycle } from "@seed/seed-lab/src/evolution.ts";
+import { selectTools } from "@carterlasalle/seed-core/src/router.ts";
+import { runOrganismTask } from "@carterlasalle/seed-runtime/src/organism.ts";
+import { connectGuardian } from "@carterlasalle/seed-runtime/src/guardian-client.ts";
+import { detectFriction } from "@carterlasalle/seed-core/src/friction.ts";
+import type { FrictionObservation } from "@carterlasalle/seed-core/src/friction.ts";
+import { runEvolutionCycle } from "@carterlasalle/seed-lab/src/evolution.ts";
 export interface RunOptions {
   capabilities?: string[];
   session?: string;

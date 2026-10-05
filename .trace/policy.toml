@@ -64,7 +64,7 @@ paths = [
   "evals/core/generated/**",
   "docs/**",
   "README.md",
-  "CODEX.md",
+  "**/README.md",
   "CONTEXT.md",
   "CONTRIBUTING.md",
   "SECURITY.md",
