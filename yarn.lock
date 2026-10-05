@@ -9,34 +9,34 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@carterlasalle/seed-cli@workspace:packages/seed-cli"
   dependencies:
-    "@carterlasalle/seed-core": "npm:0.1.3"
-    "@carterlasalle/seed-lab": "npm:0.1.3"
-    "@carterlasalle/seed-runtime": "npm:0.1.3"
+    "@carterlasalle/seed-core": "npm:0.1.4"
+    "@carterlasalle/seed-lab": "npm:0.1.4"
+    "@carterlasalle/seed-runtime": "npm:0.1.4"
   bin:
     seed: dist/cli.js
   languageName: unknown
   linkType: soft
 
-"@carterlasalle/seed-core@npm:0.1.3, @carterlasalle/seed-core@workspace:packages/seed-core":
+"@carterlasalle/seed-core@npm:0.1.4, @carterlasalle/seed-core@workspace:packages/seed-core":
   version: 0.0.0-use.local
   resolution: "@carterlasalle/seed-core@workspace:packages/seed-core"
   languageName: unknown
   linkType: soft
 
-"@carterlasalle/seed-lab@npm:0.1.3, @carterlasalle/seed-lab@workspace:packages/seed-lab":
+"@carterlasalle/seed-lab@npm:0.1.4, @carterlasalle/seed-lab@workspace:packages/seed-lab":
   version: 0.0.0-use.local
   resolution: "@carterlasalle/seed-lab@workspace:packages/seed-lab"
   dependencies:
-    "@carterlasalle/seed-core": "npm:0.1.3"
-    "@carterlasalle/seed-runtime": "npm:0.1.3"
+    "@carterlasalle/seed-core": "npm:0.1.4"
+    "@carterlasalle/seed-runtime": "npm:0.1.4"
   languageName: unknown
   linkType: soft
 
-"@carterlasalle/seed-runtime@npm:0.1.3, @carterlasalle/seed-runtime@workspace:packages/seed-runtime":
+"@carterlasalle/seed-runtime@npm:0.1.4, @carterlasalle/seed-runtime@workspace:packages/seed-runtime":
   version: 0.0.0-use.local
   resolution: "@carterlasalle/seed-runtime@workspace:packages/seed-runtime"
   dependencies:
-    "@carterlasalle/seed-core": "npm:0.1.3"
+    "@carterlasalle/seed-core": "npm:0.1.4"
   languageName: unknown
   linkType: soft
 

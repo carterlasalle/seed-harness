@@ -320,7 +320,7 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 // trace:exempt reason=internal-detail
-const invoked = process.argv[1] !== undefined && /packages\/seed-cli\/(src\/cli\.ts|dist\/cli\.js)$/.test(process.argv[1]);
+const invoked = process.argv[1] !== undefined && /(packages\/seed-cli\/(src\/cli\.ts|dist\/cli\.js)|\.bin\/seed|seed-cli\/(dist\/cli\.js|bin\/seed))$/.test(process.argv[1]);
 if (invoked) {
   // Stale-while-revalidate: synchronous cache read first so the notice
   // always lands before process.exit; background refresh stays detached.
