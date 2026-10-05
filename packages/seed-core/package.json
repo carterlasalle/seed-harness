@@ -14,7 +14,8 @@
     "provenance": true
   },
   "files": [
-    "dist/**",
+    "src/**/!(*.test).*",
+    "dist/**/!(*.test).*",
     "LICENSE",
     "README.md"
   ],
