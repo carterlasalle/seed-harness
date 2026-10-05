@@ -322,6 +322,16 @@ export async function main(argv: string[]): Promise<number> {
 // trace:exempt reason=internal-detail
 const invoked = process.argv[1] !== undefined && /packages\/seed-cli\/(src\/cli\.ts|dist\/cli\.js)$/.test(process.argv[1]);
 if (invoked) {
+  // Stale-while-revalidate: synchronous cache read first so the notice
+  // always lands before process.exit; background refresh stays detached.
+  // Never blocks on network, never throws, honors SEED_NO_UPDATE_CHECK=1.
+  try {
+    const { checkCachedUpdate } = await import("./update-check.ts");
+    const notice = checkCachedUpdate("0.1.0");
+    if (notice) console.error(`seed: update available — ${notice}`);
+  } catch {
+    // A broken cache must never break the CLI.
+  }
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (error) => {
