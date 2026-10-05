@@ -35,7 +35,7 @@ export function refreshResearch(dir?: string, root?: string): ResearchReport {
 
 // trace:v1 id=impl.cli-research-live work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function refreshResearchLive(sources: { github: { owner: string; repo: string }[]; arxiv: string[] }): Promise<ResearchReport> {
-  const { fetchMechanismEntries } = await import("@seed/seed-lab/src/research.ts");
+  const { fetchMechanismEntries } = await import("@carterlasalle/seed-lab/src/research.ts");
   try {
     // trace:exempt reason=internal-detail
     const entries = await fetchMechanismEntries(sources);

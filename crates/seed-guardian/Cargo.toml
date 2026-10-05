@@ -10,6 +10,12 @@ name = "seed-guardian"
 version = "0.1.0"
 # trace:exempt reason=internal-detail
 edition = "2021"
+# trace:exempt reason=packaging-metadata-no-product-behavior
+description = "Seed immutable trusted evaluator daemon: JSON-RPC guardian with SQLite WAL store, gates, Pareto archive, champion pointer"
+# trace:exempt reason=packaging-metadata-no-product-behavior
+license = "Apache-2.0"
+# trace:exempt reason=packaging-metadata-no-product-behavior
+repository = "https://github.com/carterlasalle/seed-harness"
 
 [dependencies]
 # trace:exempt reason=internal-detail
