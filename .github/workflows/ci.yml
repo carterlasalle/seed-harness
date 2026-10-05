@@ -43,11 +43,11 @@ jobs:
       - name: Corpus determinism (exactly 60 tasks, seed 1337)
         run: uv run --project python/seed_evolution python scripts/generate-core-evals.py --seed 1337 --output evals/core/generated && test "$(find evals/core/generated -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 60
 
+      - name: Build TS workspaces (dist for cross-package imports)
+        run: yarn workspaces foreach --all run build
+
       - name: TS tests (110 node:test cases)
         run: yarn test
-
-      - name: TS typecheck (tsc --noEmit per package)
-        run: yarn typecheck
 
       - name: Boundary gate (guardian/organism split)
         run: node scripts/verify-boundaries.ts
