@@ -15,8 +15,8 @@ class Seed < Formula
   desc "Self-evolving coding-agent harness with an immutable Rust guardian"
   homepage "https://github.com/carterlasalle/seed-harness"
   # PLACEHOLDER — replaced by contrib/brew/bump.sh after the first PyPI release.
-  url "https://files.pythonhosted.org/packages/46/23/adffbd00e4f1dc544a66d707904dcf1b9a53c05909ee20dac13e1169ef1b/seed_evolution-0.1.4.tar.gz"
-  sha256 "bd6112539bf94d7d19a6deae4b771a5f097bc63b6ecfcf9027427cba15e0a939"
+  url "https://files.pythonhosted.org/packages/88/9e/099a8a873cbb6e1d705e380bb5e51db637d8f486028239d73ff0e12d279e/seed_evolution-0.1.5.tar.gz"
+  sha256 "a01e9fe695e013e64e8bee426df47d062cac0a421ebe350a49c1447e947ec6f0"
   license "Apache-2.0"
 
   livecheck do
@@ -30,8 +30,8 @@ class Seed < Formula
   depends_on "pipx"
   depends_on "python@3.13"
   resource "seed-cli" do
-    url "https://registry.npmjs.org/@carterlasalle/seed-cli/-/seed-cli-0.1.4.tgz"
-    sha256 "d7a12852aaabd02270cb3aaa5ba69d675c9d5152bd64cea5e58f5816cdeba1ef"
+    url "https://registry.npmjs.org/@carterlasalle/seed-cli/-/seed-cli-0.1.5.tgz"
+    sha256 "8b7012b410c1c83e872a7feec0fcce74106cf682c7070c6c433faabc5894f3d7"
   end
 
   def install
@@ -48,10 +48,9 @@ class Seed < Formula
       mkdir_p libexec/"npm"
       cp_r Dir.pwd, libexec/"npm/package"
     end
-    system "npm", "install", "--prefix", (libexec/"npm/package").to_s, (libexec/"npm/package").to_s
+    system "npm", "install", *std_npm_args(prefix: (libexec/"npm/package").to_s), (libexec/"npm/package").to_s
     bin.install_symlink libexec/"npm/package/dist/cli.js" => "seed"
     bin.install_symlink libexec/"bin/seed-gepa"
-    # Rust side: the guardian daemon ships via `cargo install seed-guardian`
     # from crates.io (same version pin as this formula's release tag).
   end
 
