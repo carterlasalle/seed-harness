@@ -27,6 +27,7 @@ import {
 import type { Component, OverlayHandle, SlashCommand, Terminal } from "@earendil-works/pi-tui";
 import { HeaderBar, StatusBar } from "./components/chrome.ts";
 import { Transcript } from "./components/transcript.ts";
+import { registerCoreCommands, registerCoreKeybindings } from "./commands/builtin.ts";
 import { classifyError } from "./errors.ts";
 import {
   buildEvolutionDialog,
@@ -63,8 +64,16 @@ export interface SeedTuiHost {
   runTask?: (prompt: string, emit: (event: TurnEvent) => void) => Promise<{ ok: boolean; summary: string }>;
   /** Called once the UI has stopped, before launchTui resolves. */
   onQuit?: () => void;
-  /** Evolution data for the `/evolution` dialog; the host owns these facts. */
-  evolution?: () => { champion?: string; candidates?: { ref: string; note: string }[]; friction?: string[] };
+  /** Evolution data for the `/evolve` dialog; the host owns these facts. */
+  evolution?: () => {
+    champion?: string;
+    candidates?: { ref: string; note: string }[];
+    friction?: string[];
+  } | Promise<{
+    champion?: string;
+    candidates?: { ref: string; note: string }[];
+    friction?: string[];
+  }>;
   model?: string;
   thinking?: string;
   /**
@@ -108,7 +117,8 @@ export function slashCommands(registry: SeedRegistry): SlashCommand[] {
 // trace:v1 id=impl.tui-launch work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function launchTui(host: SeedTuiHost): Promise<number> {
   const { registry } = host;
-  const style: Styler = createStyler();
+  let style: Styler = createStyler();
+  let activeTheme = "seed";
   const terminal = host.terminal ?? new ProcessTerminal();
   const tui = new TuiMainScreen(terminal);
   const header = new HeaderBar(style);
@@ -252,11 +262,11 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
         openOverlay("Registry", buildRegistryDialog(registry, style, closeOverlay), closeOverlay);
         return;
       case "evolution":
-        openOverlay(
-          "Evolution",
-          buildEvolutionDialog(host.evolution?.() ?? {}, style, closeOverlay),
-          closeOverlay,
-        );
+        // trace:exempt reason=internal-detail
+        void (async () => {
+          const data = (await host.evolution?.()) ?? {};
+          openOverlay("Evolution", buildEvolutionDialog(data, style, closeOverlay), closeOverlay);
+        })();
         return;
       default:
         print(`no dialog named ${JSON.stringify(name)}${args ? ` (args: ${args})` : ""}`);
@@ -269,6 +279,85 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     open: (dialog, dialogArgs) => openDialog(dialog, dialogArgs),
     print,
   };
+
+  /** Write a setting through the registry so the UI repaints from the event. */
+  // trace:exempt reason=internal-detail
+  const setSetting = (key: string, value: unknown): void => {
+    const setting = registry.get("setting", key);
+    if (!setting || setting.readOnly) return;
+    registry.register("setting", { ...setting, value });
+  };
+
+  /** Cycle reasoning effort. Meaningless values are still shown as chosen. */
+  // trace:exempt reason=internal-detail
+  const cycleThinking = (): void => {
+    const setting = registry.get("setting", "session.thinking");
+    const values = setting?.values ?? ["off", "low", "medium", "high"];
+    const current = String(setting?.value ?? "medium");
+    const index = values.indexOf(current);
+    const next = values[(index + 1) % values.length] ?? "off";
+    setSetting("session.thinking", next);
+    header.update({ thinking: next });
+    print(`thinking → ${next}`);
+  };
+
+  // The app owns this display toggle, and mirrors it into the registry when the
+  // setting exists. Reading state back from a setting the host may not have
+  // registered would make the second press a no-op.
+  let thinkingShown = registry.get("setting", "session.showThinking")?.value !== false;
+  // trace:exempt reason=internal-detail
+  const toggleThinking = (): void => {
+    thinkingShown = !thinkingShown;
+    setSetting("session.showThinking", thinkingShown);
+    transcript.setShowThinking(thinkingShown);
+    print(`thinking blocks ${thinkingShown ? "shown" : "hidden"}`);
+  };
+
+  /** Switch palette. Themes are registry entries like everything else. */
+  // trace:exempt reason=internal-detail
+  const applyTheme = (requested: string): void => {
+    const themes = registry.list("theme");
+    const chosen =
+      themes.find((t) => t.name === requested) ??
+      (requested.length === 0
+        ? themes[(themes.findIndex((t) => t.name === activeTheme) + 1) % Math.max(1, themes.length)]
+        : undefined);
+    // trace:exempt reason=internal-detail
+    if (!chosen) {
+      print(`unknown theme ${JSON.stringify(requested)} — available: ${themes.map((t) => t.name).join(", ")}`);
+      return;
+    }
+    activeTheme = chosen.name;
+    style = createStyler({ name: chosen.name, description: chosen.description, colors: chosen.colors });
+    header.setStyle(style);
+    status.setStyle(style);
+    transcript.setStyle(style);
+    editor.borderColor = (text: string) => style("border", text);
+    repaint();
+    print(`theme → ${chosen.name}`);
+  };
+
+  // The app drives these commands, so it binds the real handlers here rather
+  // than relying on whatever a headless builder registered. Re-registering the
+  // same ids replaces them, and every replacement publishes an event.
+  // trace:exempt reason=internal-detail
+  registerCoreCommands(registry, {
+    onReload: () => {
+      watcher?.flush();
+      print("rediscovered capabilities, skills, and models");
+    },
+    onQuit: shutdown,
+    onTheme: (args) => applyTheme(args.trim()),
+  });
+  registerCoreKeybindings(registry);
+
+  /** Keybindings are read from the registry, so editing one changes the key. */
+  // trace:exempt reason=internal-detail
+  const bindingMatches = (data: string, action: string): boolean =>
+    registry
+      .list("keybinding")
+      .filter((binding) => binding.action === action)
+      .some((binding) => binding.keys.some((key) => matchesKey(data, key as Parameters<typeof matchesKey>[1])));
 
   // trace:exempt reason=internal-detail
   const dispatch = async (text: string): Promise<void> => {
@@ -342,10 +431,11 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     new CombinedAutocompleteProvider(slashCommands(registry), host.cwd, null),
   );
 
-  // Ctrl+P: the palette is the same registry the slash menu reads.
+  // Ctrl+P and the reasoning controls read their keys from the registry, so
+  // editing a keybinding entry changes which keys respond.
   removeListener = tui.addInputListener((data: string) => {
     // trace:exempt reason=internal-detail
-    if (matchesKey(data, "ctrl+p")) {
+    if (bindingMatches(data, "seed.palette")) {
       openOverlay(
         "Commands",
         // trace:exempt reason=internal-detail
@@ -355,6 +445,16 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
         }, closeOverlay),
         closeOverlay,
       );
+      return { consume: true };
+    }
+    // trace:exempt reason=internal-detail
+    if (bindingMatches(data, "seed.thinking.cycle")) {
+      cycleThinking();
+      return { consume: true };
+    }
+    // trace:exempt reason=internal-detail
+    if (bindingMatches(data, "seed.thinking.toggle")) {
+      toggleThinking();
       return { consume: true };
     }
     return undefined;

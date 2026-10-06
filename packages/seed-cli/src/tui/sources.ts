@@ -25,6 +25,7 @@ import type {
 } from "@carterlasalle/seed-tui/src/registry/types.ts";
 import { registerCoreCommands } from "@carterlasalle/seed-tui/src/commands/builtin.ts";
 import type { WatchSource } from "@carterlasalle/seed-tui/src/registry/watch.ts";
+import { registerThemes } from "@carterlasalle/seed-tui/src/theme/theme.ts";
 import { discoverCapabilities } from "../capabilities.ts";
 import { listModels } from "../models.ts";
 import { runDoctor } from "../doctor.ts";
@@ -188,6 +189,7 @@ export function buildRegistry(root?: string): SeedRegistry {
   for (const entry of toolEntries(capabilities, visibleLimit)) registry.register("tool", entry);
 
   registerCoreCommands(registry);
+  registerThemes(registry);
   registerEngineCommands(registry);
   registerRenderers(registry);
   return registry;

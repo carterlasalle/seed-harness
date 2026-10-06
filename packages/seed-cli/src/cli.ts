@@ -344,6 +344,22 @@ export async function main(argv: string[]): Promise<number> {
             model: process.env.SEED_MODEL,
             runTask: (prompt, emit) => runInteractiveTask(prompt, emit),
             watchSources: watchSourcesFor(),
+            evolution: async () => {
+              // Real facts only: the champion from the guardian (with its
+              // local fallback) and friction markers from recorded runs.
+              // Candidates stay empty until a candidate store is surfaced,
+              // rather than being invented for the dialog.
+              const champion = await showChampion();
+              const runs = recentRuns(8);
+              const friction = runs
+                .map((run) => {
+                  const match = /friction=([^ ]+)/.exec(run.detail);
+                  const mark = match?.[1];
+                  return mark && mark !== "none" ? `${run.id}: ${mark}` : null;
+                })
+                .filter((line): line is string => line !== null);
+              return { champion: champion.ref, candidates: [], friction };
+            },
           });
         }
         console.log(USAGE);
