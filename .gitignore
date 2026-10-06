@@ -39,3 +39,5 @@ SEED_SCRATCH/
 .bughunt/
 .pyre_configuration
 bughunt.toml
+!.scc/plugins.toml
+!.scc/plugins.lock
