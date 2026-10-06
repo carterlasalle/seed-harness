@@ -146,6 +146,7 @@ export class Transcript implements Component {
   readonly cards: Card[] = [];
   private style: Styler;
   private expanded = true;
+  private showThinking = true;
   private counter = 0;
   private markdown: Markdown;
   onDebug?: () => void;
@@ -172,6 +173,16 @@ export class Transcript implements Component {
   // trace:exempt reason=internal-detail
   isExpanded(): boolean {
     return this.expanded;
+  }
+
+  /**
+   * Whether reasoning blocks are drawn. Independent of `expanded`: someone may
+   * keep tool bodies open while hiding thinking, or the reverse.
+   */
+  // trace:exempt reason=internal-detail
+  setShowThinking(show: boolean): void {
+    this.showThinking = show;
+    this.invalidate();
   }
 
   /** Append a card and return its id (used for later in-place updates). */
@@ -227,6 +238,7 @@ export class Transcript implements Component {
     };
     // trace:exempt reason=internal-detail
     for (const card of this.cards) {
+      if (card.kind === "thinking" && !this.showThinking) continue;
       lines.push(...renderCard(card, width, this.style, this.expanded, assistant));
     }
     return lines;

@@ -45,10 +45,37 @@ export const CORE_COMMANDS: readonly CommandSpec[] = [
   { name: "skills", description: "Browse discovered skills", dialog: "skills" },
   { name: "tools", description: "Inspect capability routing", dialog: "tools" },
   { name: "registry", description: "Inspect everything currently registered", dialog: "registry" },
-  { name: "evolution", description: "Champion, candidates, and friction", dialog: "evolution" },
+  { name: "evolve", description: "Evolution control center", dialog: "evolution" },
+  { name: "evolution", description: "Alias for /evolve", dialog: "evolution" },
+  { name: "theme", description: "Change appearance", argumentHint: "[name]" },
   { name: "reload", description: "Rediscover capabilities, skills, and models" },
   { name: "quit", description: "Leave the interactive session" },
 ];
+
+/**
+ * Keybindings the app matches against the registry rather than hard-coding.
+ * Editing or removing an entry changes which keys respond.
+ */
+// trace:exempt reason=const-data
+export const CORE_KEYBINDINGS: readonly { action: string; keys: string[]; description: string }[] = [
+  { action: "seed.palette", keys: ["ctrl+p"], description: "Open the command palette" },
+  { action: "seed.thinking.cycle", keys: ["shift+tab"], description: "Cycle reasoning effort" },
+  { action: "seed.thinking.toggle", keys: ["ctrl+t"], description: "Show or hide thinking blocks" },
+];
+
+// trace:v1 id=impl.tui-register-keybindings work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function registerCoreKeybindings(registry: SeedRegistry): void {
+  // trace:exempt reason=internal-detail
+  for (const binding of CORE_KEYBINDINGS) {
+    registry.register("keybinding", {
+      id: binding.action,
+      action: binding.action,
+      keys: [...binding.keys],
+      description: binding.description,
+      source: "builtin",
+    });
+  }
+}
 
 /**
  * Register the core commands. `onReload` and `onQuit` are host hooks; both
@@ -57,7 +84,11 @@ export const CORE_COMMANDS: readonly CommandSpec[] = [
 // trace:v1 id=impl.tui-register-core-commands work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export function registerCoreCommands(
   registry: SeedRegistry,
-  hooks: { onReload?: (ctx: CommandContext) => void | Promise<void>; onQuit?: (ctx: CommandContext) => void } = {},
+  hooks: {
+    onReload?: (ctx: CommandContext) => void | Promise<void>;
+    onQuit?: (ctx: CommandContext) => void;
+    onTheme?: (args: string, ctx: CommandContext) => void;
+  } = {},
 ): void {
   // trace:exempt reason=internal-detail
   for (const spec of CORE_COMMANDS) {
@@ -76,6 +107,12 @@ export function registerCoreCommands(
         // trace:exempt reason=internal-detail
         if (spec.name === "reload") {
           await hooks.onReload?.(ctx);
+          return;
+        }
+        // trace:exempt reason=internal-detail
+        if (spec.name === "theme") {
+          if (hooks.onTheme) hooks.onTheme(args, ctx);
+          else ctx.print(`themes: ${registry.list("theme").map((t) => t.name).join(", ")}`);
           return;
         }
         // trace:exempt reason=internal-detail

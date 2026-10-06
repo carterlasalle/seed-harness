@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { SeedRegistry } from "./registry/registry.ts";
 import { registerCoreCommands } from "./commands/builtin.ts";
+import { registerThemes } from "./theme/theme.ts";
 import { launchTui } from "./app.ts";
 import type { SeedTuiHandle } from "./app.ts";
 
@@ -207,6 +208,128 @@ test("a failing turn renders a typed error card, not a bare throw", async () => 
 
   await submit(terminal, handle, "fix the thing");
   assert.ok(terminal.output.includes("guardian error"), "classified by failure domain");
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("/theme switches the palette through the theme registry", async () => {
+  const registry = seeded();
+  registerThemes(registry);
+  const { app, handle, terminal } = await start({ registry, cwd: process.cwd() });
+
+  await submit(terminal, handle, "/theme mono");
+  assert.ok(terminal.output.includes("theme → mono"));
+
+  await submit(terminal, handle, "/theme nosuchtheme");
+  assert.ok(terminal.output.includes("unknown theme"), "an unknown name is reported, not ignored");
+
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("/theme with no argument cycles to the next registered theme", async () => {
+  const registry = seeded();
+  registerThemes(registry);
+  const { app, handle, terminal } = await start({ registry, cwd: process.cwd() });
+  await submit(terminal, handle, "/theme");
+  assert.ok(terminal.output.includes("theme → mono"), "cycles from the default theme");
+  await submit(terminal, handle, "/theme");
+  assert.ok(terminal.output.includes("theme → seed"), "and wraps back around");
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("Ctrl+T toggles thinking blocks without touching tool cards", async () => {
+  const registry = seeded();
+  const { app, handle, terminal } = await start({
+    registry,
+    cwd: process.cwd(),
+    runTask: async (_prompt, emit) => {
+      emit({ kind: "thinking", text: "a-private-deliberation" });
+      emit({ kind: "tool", name: "python", detail: "work" });
+      emit({ kind: "tool-done", name: "python", ok: true, durationMs: 10 });
+      return { ok: true, summary: "done" };
+    },
+  });
+
+  await submit(terminal, handle, "go");
+  assert.ok(terminal.output.includes("a-private-deliberation"), "thinking shown by default");
+
+  terminal.send("\u0014"); // Ctrl+T
+  terminal.output = "";
+  handle.renderNow();
+  assert.ok(!terminal.output.includes("a-private-deliberation"), "thinking hidden after toggle");
+  assert.ok(terminal.output.includes("python"), "tool cards are unaffected");
+
+  terminal.send("\u0014");
+  terminal.output = "";
+  handle.renderNow();
+  assert.ok(terminal.output.includes("a-private-deliberation"), "and shown again");
+
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("Shift+Tab cycles the reasoning setting and the header follows", async () => {
+  const registry = seeded();
+  const { app, handle, terminal } = await start({ registry, cwd: process.cwd() });
+  const before = registry.get("setting", "session.thinking")?.value;
+  if (!before) {
+    registry.register("setting", {
+      id: "session.thinking",
+      key: "session.thinking",
+      type: "enum",
+      default: "medium",
+      value: "medium",
+      values: ["off", "low", "medium", "high"],
+      group: "Session",
+      label: "Reasoning effort",
+      description: "",
+      scope: "session",
+      restart: false,
+      source: "builtin",
+    });
+  }
+
+  terminal.send("\u001b[Z"); // Shift+Tab
+  handle.renderNow();
+  const after = registry.get("setting", "session.thinking")?.value;
+  assert.notEqual(after, before, "the setting advanced");
+
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("editing a keybinding entry changes which key responds", async () => {
+  const registry = seeded();
+  const { app, handle, terminal } = await start({ registry, cwd: process.cwd() });
+
+  // Ctrl+P is bound by default.
+  terminal.send("\u0010");
+  handle.renderNow();
+  assert.ok(terminal.output.includes("Commands"), "default palette key works");
+  terminal.send("\u001b");
+  handle.renderNow();
+
+  // Rebind it: now Ctrl+O opens the palette and Ctrl+P must do nothing.
+  registry.register("keybinding", {
+    id: "seed.palette",
+    action: "seed.palette",
+    keys: ["ctrl+o"],
+    description: "Open the command palette",
+    source: "extension",
+  });
+  terminal.output = "";
+  terminal.send("\u0010"); // old key
+  handle.renderNow();
+  assert.ok(!terminal.output.includes("Commands"), "the old key no longer opens the palette");
+
+  terminal.send("\u000f"); // Ctrl+O
+  handle.renderNow();
+  assert.ok(terminal.output.includes("Commands"), "the new key does");
+
+  terminal.send("\u001b");
+  handle.renderNow();
   await submit(terminal, handle, "/quit");
   await app;
 });
