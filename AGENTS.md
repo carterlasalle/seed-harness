@@ -2948,10 +2948,16 @@ throws. State in `~/.seed`, never the user project. Secrets: none in repo;
 - `.scc/scc.db` is 700M+ and untracked; never `git add -A` blindly without
   checking `git status` first.
 - npm and PyPI publish via **trusted publishing (OIDC)**, so there is no
-  `NPM_TOKEN` and there should never be one. If the npm job fails with an
-  authentication error, the fix is a trusted publisher configured on npmjs.com
-  for that package — naming this repo and `release.yml` — not a stored token.
+  `NPM_TOKEN` and there should never be one. A missing trust relationship
+  surfaces as `npm error code E404 ... could not be found or you do not have
+  permission to access it` — that means no trusted publisher is registered for
+  the package, **not** that the package is missing. The fix is `npm trust
+  github` for that package (see CONTRIBUTING), never a stored token.
   `npm@>=11.5.1` is required and Node 22 ships npm 10, so the job upgrades it.
+- A tag fires `release.yml` exactly once, so a surface added to the workflow
+  after a tag was pushed is stranded. Retry with
+  `gh workflow run release.yml -f tag=vX.Y.Z`; every publish is idempotent, so
+  a retry completes what is missing and skips what already shipped.
 - Homebrew's formula pins both the PyPI sdist and the npm tarball by sha256,
   so it must be regenerated (`contrib/brew/bump.sh`) only **after** both
   releases exist; bumping it early produces an uninstallable formula.
