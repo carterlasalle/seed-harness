@@ -7,7 +7,7 @@
 # trace:exempt reason=internal-detail
 name = "seed-guardian"
 # trace:exempt reason=internal-detail
-version = "0.1.4"
+version = "0.1.5"
 # trace:exempt reason=internal-detail
 edition = "2021"
 # trace:exempt reason=packaging-metadata-no-product-behavior
