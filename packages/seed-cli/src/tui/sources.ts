@@ -26,6 +26,7 @@ import type {
 import { registerCoreCommands } from "@carterlasalle/seed-tui/src/commands/builtin.ts";
 import type { WatchSource } from "@carterlasalle/seed-tui/src/registry/watch.ts";
 import { registerThemes } from "@carterlasalle/seed-tui/src/theme/theme.ts";
+import { DEFAULT_MAX_VISIBLE_TOOLS, selectTools } from "@carterlasalle/seed-runtime/dist/tool-router.js";
 import { discoverCapabilities } from "../capabilities.ts";
 import { listModels } from "../models.ts";
 import { runDoctor } from "../doctor.ts";
@@ -111,21 +112,37 @@ function settingEntries(): SettingEntry[] {
 }
 
 // trace:exempt reason=internal-detail
-function modelEntries(root?: string): ModelEntry[] {
-  return listModels(root).map((profile) => ({
-    id: profile.model,
-    model: profile.model,
-    provider: profile.provider ?? "unknown",
-    family: profile.family ?? "unknown",
-    profileStatus: profile.profileStatus,
-    capabilities: { ...profile.capabilities },
-    strengths: [...profile.strengths],
-    weaknesses: [...profile.weaknesses],
-    costPerTask: profile.costPerTask,
-    p50LatencyMs: profile.p50LatencyMs,
-    tasksEvaluated: profile.tasksEvaluated,
-    source: "profile",
-  }));
+function modelEntries(root?: string, registry?: SeedRegistry): ModelEntry[] {
+  // Role assignments come from the model-scope settings; a model can hold
+  // several roles, so the first in the canonical order is shown.
+  const roleOrder = ["task", "scientist", "mutator", "judge", "challenge"];
+  // trace:exempt reason=internal-detail
+  const roleOf = (modelId: string): string | undefined => {
+    if (!registry) return undefined;
+    // trace:exempt reason=internal-detail
+    for (const role of roleOrder) {
+      if (registry.get("setting", `models.${role}`)?.value === modelId) return role;
+    }
+    return undefined;
+  };
+  return listModels(root).map((profile) => {
+    const role = roleOf(profile.model);
+    return {
+      id: profile.model,
+      model: profile.model,
+      provider: profile.provider ?? "unknown",
+      family: profile.family ?? "unknown",
+      profileStatus: profile.profileStatus,
+      capabilities: { ...profile.capabilities },
+      strengths: [...profile.strengths],
+      weaknesses: [...profile.weaknesses],
+      costPerTask: profile.costPerTask,
+      p50LatencyMs: profile.p50LatencyMs,
+      tasksEvaluated: profile.tasksEvaluated,
+      ...(role ? { role } : {}),
+      source: "profile",
+    };
+  });
 }
 
 // trace:exempt reason=internal-detail
@@ -175,7 +192,7 @@ export function buildRegistry(root?: string): SeedRegistry {
   const repo = seedRoot(root);
 
   for (const entry of settingEntries()) registry.register("setting", entry);
-  for (const entry of modelEntries(root)) registry.register("model", entry);
+  for (const entry of modelEntries(root, registry)) registry.register("model", entry);
 
   const skills = discoverSkills(repo);
   for (const entry of skills) registry.register("skill", entry);
@@ -260,6 +277,40 @@ export function registerRenderers(registry: SeedRegistry): void {
       for: r.for,
       summary: r.summary,
       source: "builtin",
+    });
+  }
+}
+
+/**
+ * Recompute router visibility for the current task and publish it onto the
+ * tool entries, so `/tools` reports why a tool is or is not visible instead of
+ * leaving the columns blank.
+ *
+ * Tools are ranked at capability granularity because that is what the router
+ * scores; a tool inherits the rank of the capability that provides it.
+ */
+// trace:v1 id=impl.cli-tui-refresh-routing work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function refreshToolRouting(registry: SeedRegistry, task: string, root?: string): void {
+  // trace:exempt reason=internal-detail
+  const cards = discoverCapabilities(root).map((manifest) => ({
+    id: manifest.name,
+    name: manifest.name,
+    description: `${manifest.description ?? ""} ${(manifest.tools ?? []).join(" ")}`,
+    capability: manifest.name,
+    languages: [] as readonly string[],
+  }));
+  const selected = selectTools({ task, cards });
+  // trace:exempt reason=internal-detail
+  const ranked = new Map(selected.map((tool, index) => [tool.id, { score: tool.score, rank: index + 1 }]));
+  const limit = DEFAULT_MAX_VISIBLE_TOOLS;
+  // trace:exempt reason=internal-detail
+  for (const tool of registry.list("tool")) {
+    const hit = ranked.get(tool.capability);
+    registry.register("tool", {
+      ...tool,
+      visible: hit !== undefined,
+      visibleLimit: limit,
+      ...(hit ? { score: hit.score, rank: hit.rank } : {}),
     });
   }
 }

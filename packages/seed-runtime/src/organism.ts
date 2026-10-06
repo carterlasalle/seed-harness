@@ -54,6 +54,8 @@ export interface AgentLoopOptions {
   model?: string;
   maxTurns?: number;
   systemPrompt?: string;
+  /** Requested reasoning effort (off|low|medium|high); "off" sends nothing. */
+  thinking?: string;
   skills?: { id: string; description: string }[];
   hooks?: { event: string; payload: (info: { index: number; text: string; ok: boolean }) => unknown }[];
   onTurn?: (turn: AgentLoopTurn) => void;
@@ -288,7 +290,12 @@ export async function runAgentLoop(
       if (hook.event === "before_model") hook.payload({ index, text: "", ok: true });
     }
     // trace:exempt reason=internal-detail
-    const turn = await completeModelTurn({ model, system, messages: history });
+    const turn = await completeModelTurn({
+      model,
+      system,
+      messages: history,
+      ...(options?.thinking ? { reasoning: options.thinking } : {}),
+    });
     // trace:exempt reason=internal-detail
     emit(toEvent(task, "model.request", { model, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens }));
     // trace:exempt reason=internal-detail

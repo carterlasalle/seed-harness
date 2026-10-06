@@ -84,10 +84,11 @@ export function modelItems(registry: SeedRegistry): SelectItem[] {
         ? `${model.tasksEvaluated} tasks · $${model.costPerTask.toFixed(3)}/task · ${model.p50LatencyMs}ms p50`
         : "unmeasured";
     const strengths = model.strengths.length > 0 ? ` · strong: ${model.strengths.slice(0, 3).join("/")}` : "";
+    const role = model.role ? `${model.role} role · ` : "";
     return {
       value: model.model,
       label: model.model,
-      description: `${model.provider}/${model.family} · ${model.profileStatus} · ${measured}${strengths}`,
+      description: `${role}${model.provider}/${model.family} · ${model.profileStatus} · ${measured}${strengths}`,
     };
   });
 }
