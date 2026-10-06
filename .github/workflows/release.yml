@@ -1,22 +1,40 @@
-# Seed release — SBOM + build provenance + PyPI publish on tags.
-# Purpose: every `v*` tag produces a CycloneDX SBOM of the shippable surface
+# Seed release — SBOM + build provenance + registry publishes.
+# Purpose: a `v*` tag produces a CycloneDX SBOM of the shippable surface
 # (TS workspaces, guardian crates, evolution package) plus a Sigstore
 # attestation binding the SBOM to the exact tag commit, and publishes
-# seed-evolution to PyPI via Trusted Publishing (no credentials in repo).
-# Why: promotion and rollback decisions reference exact hashes; a release
-# must prove what it is and ship the installable artifact.
-# Trace: tag version must equal python/seed_evolution version (checked in CI).
+# seed-evolution to PyPI and the workspace packages to npm, both via Trusted
+# Publishing (no credentials in the repository).
+# Why: promotion and rollback decisions reference exact hashes; a release must
+# prove what it is and ship the installable artifact.
+# Trace: tag version must equal the evolution and workspace versions (checked here).
+#
+# Retrying: `workflow_dispatch` with `tag: vX.Y.Z` re-runs the whole release for
+# a tag that already exists. Publishes are idempotent — a surface that already
+# has the version is reported and skipped — so a retry cannot rewrite a
+# published artifact or fail merely because one surface got there first. This
+# exists because a tag fires the workflow exactly once: a surface added to the
+# workflow after a tag was pushed would otherwise be stranded forever.
 # trace:v1 id=impl.release-workflow work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 
 "on":
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, e.g. v0.2.0"
+        required: true
+        type: string
 
 permissions:
   contents: write
   id-token: write
   attestations: write
+
+env:
+  # On a tag push this is the pushed tag; on a dispatch it is the requested one.
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   sbom-attest:
@@ -29,14 +47,16 @@ jobs:
       - name: Check out tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - name: Verify tag is on protected main
         run: |
           set -euo pipefail
           git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
-            || { echo "SEED-UNPROTECTED-TAG: $GITHUB_SHA is not an ancestor of protected main"; exit 1; }
+          tag_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$tag_sha" origin/main \
+            || { echo "SEED-UNPROTECTED-TAG: ${RELEASE_TAG} (${tag_sha}) is not an ancestor of protected main"; exit 1; }
       - name: Enable corepack (yarn 4.9.2)
         run: corepack enable
       - name: Install TS workspaces
@@ -46,7 +66,7 @@ jobs:
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_NAME: ${{ env.RELEASE_TAG }}
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -69,29 +89,40 @@ jobs:
       - name: Check out tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - name: Verify tag matches package version
         run: |
           set -euo pipefail
           project_version="$(python3 -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("python/seed_evolution/pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${RELEASE_TAG#v}"
           test "$tag_version" = "$project_version" || { echo "tag $tag_version != package $project_version"; exit 1; }
       - name: Install uv
         run: pip install uv
       - name: Build
         run: uv build --project python/seed_evolution --out-dir dist
       - name: Publish to PyPI
-        run: uv publish
+        # Idempotent: PyPI versions are immutable, so an existing one is a
+        # completed surface rather than a failure.
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          if curl -sf "https://pypi.org/pypi/seed-evolution/${version}/json" >/dev/null; then
+            echo "seed-evolution ${version} is already published; skipping"
+          else
+            uv publish
+          fi
       - name: GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: dist/*
           generate_release_notes: true
 
   # npm via Trusted Publishing: OIDC exchange with npmjs.com, so no long-lived
   # token exists in this repository or anywhere else. Each package must have a
-  # trusted publisher configured on npmjs.com naming this repository and this
+  # trusted publisher registered on npmjs.com naming this repository and this
   # workflow file; that is a one-time operator step, not something this job can
   # grant itself. Provenance is attached automatically by the exchange.
   npm-publish:
@@ -104,12 +135,13 @@ jobs:
       - name: Check out tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - name: Verify tag matches every package version
         run: |
           set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${RELEASE_TAG#v}"
           for manifest in packages/*/package.json; do
             version="$(node -p "require('./${manifest}').version")"
             test "$version" = "$tag_version" \
@@ -132,10 +164,18 @@ jobs:
         run: yarn exec tsc -p packages/seed-core/tsconfig.json && yarn exec tsc -p packages/seed-runtime/tsconfig.json && yarn exec tsc -p packages/seed-lab/tsconfig.json && yarn exec tsc -p packages/seed-tui/tsconfig.json && yarn exec tsc -p packages/seed-cli/tsconfig.json
       - name: Publish packages
         # Dependency order: a consumer resolves its pins at install time.
+        # Idempotent per package, so a partial publish is completed rather than
+        # restarted, and an existing version is reported instead of re-pushed.
         run: |
           set -euo pipefail
+          version="${RELEASE_TAG#v}"
           for dir in seed-core seed-runtime seed-lab seed-tui seed-cli; do
-            echo "::group::npm publish @carterlasalle/${dir}"
+            name="@carterlasalle/${dir}"
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "${name}@${version} is already published; skipping"
+              continue
+            fi
+            echo "::group::npm publish ${name}@${version}"
             ( cd "packages/${dir}" && npm publish --access public --provenance )
             echo "::endgroup::"
           done
