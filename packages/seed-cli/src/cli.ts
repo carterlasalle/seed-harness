@@ -433,7 +433,11 @@ if (invoked) {
   // Never blocks on network, never throws, honors SEED_NO_UPDATE_CHECK=1.
   try {
     const { checkCachedUpdate } = await import("./update-check.ts");
-    const notice = checkCachedUpdate("0.1.0");
+    const { installedVersion } = await import("./version.ts");
+    // Compare against the version actually installed. An unknown version
+    // skips the reminder rather than inventing a number to compare with.
+    const version = installedVersion();
+    const notice = version ? checkCachedUpdate(version) : undefined;
     if (notice) console.error(`seed: update available — ${notice}`);
   } catch {
     // A broken cache must never break the CLI.

@@ -66,13 +66,14 @@ cargo build --workspace
 
 ### From the registries
 
-Each surface ships separately; all four are currently at `0.1.5`.
+Each surface ships separately and follows its own registry's latest
+release.
 
 ```sh
 brew install carterlasalle/tap/seed   # seed CLI + seed-gepa + seed-guardian
 npm install -g @carterlasalle/seed-cli
-cargo install seed-guardian --version 0.1.5
-pipx install "seed-evolution==0.1.5"  # or: uvx --from "seed-evolution==0.1.5" seed-gepa --help
+cargo install seed-guardian
+pipx install seed-evolution           # or: uvx --from seed-evolution seed-gepa --help
 ```
 
 Verify each install with `seed help` (CLI), `seed-gepa --help` (GEPA loop),

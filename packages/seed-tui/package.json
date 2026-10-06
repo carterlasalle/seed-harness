@@ -1,7 +1,7 @@
 {
   "$comment": "Package @seed-tui. Purpose: the interactive frontend — a live projection of the harness. Why: one presentation layer over the same engine, never the architecture itself. Invariant: the ONLY package allowed to depend on @earendil-works/pi-tui; every other package is Pi-free (scripts/verify-boundaries.ts enforces). trace:v1 id=impl.pkg-seed-tui work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85",
   "name": "@carterlasalle/seed-tui",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "test": "node --test",
@@ -27,8 +27,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@carterlasalle/seed-core": "0.1.5",
-    "@carterlasalle/seed-runtime": "0.1.5",
+    "@carterlasalle/seed-core": "0.2.0",
+    "@carterlasalle/seed-runtime": "0.2.0",
     "@earendil-works/pi-tui": "1.0.4"
   }
 }
