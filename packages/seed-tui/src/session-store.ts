@@ -16,6 +16,7 @@
 //     which is what makes the tree a tree.
 // Public types/functions: StoredSession, SessionStore, createSessionStore.
 
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Card } from "./components/transcript.ts";
@@ -83,7 +84,9 @@ export function createSessionStore(dir: string): SessionStore {
     dir,
     // trace:exempt reason=internal-detail
     create({ parent, cwd, model }) {
-      const id = `sess-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffff).toString(16)}`;
+      // A session id becomes a file name, so it must not be predictable or
+      // collision-prone: a UUID is both.
+      const id = `sess-${randomUUID()}`;
       // trace:exempt reason=internal-detail
       write({
         id,
