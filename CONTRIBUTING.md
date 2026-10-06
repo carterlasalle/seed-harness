@@ -63,7 +63,25 @@ requires an authenticated operator for it.
   (`release.yml`) and the repo must match the `repository` field in each
   `package.json`, or the OIDC exchange is rejected.
 
-Until that exists, the npm publish job fails with an authentication error.
+Until that exists, the npm publish job fails with:
+
+```text
+npm error code E404
+npm error 404 Not Found - PUT https://registry.npmjs.org/@carterlasalle%2fseed-core
+npm error 404  The requested resource '@carterlasalle/seed-core@0.2.0'
+npm error 404  could not be found or you do not have permission to access it.
+```
+
+That `E404` means **no trusted publisher is registered** — not that the
+package is missing. The package exists; npm reports a missing trust
+relationship this way rather than disclosing permissions.
+
 Do not add a long-lived `NPM_TOKEN` to work around it: the tokenless path
-is the point. Once registered, re-running the release workflow for the
-tag publishes npm with no further code change.
+is the point. Once registered, retry without touching the tag:
+
+```sh
+gh workflow run release.yml -f tag=vX.Y.Z
+```
+
+Publishes are idempotent, so a retry skips surfaces that already shipped
+and completes the ones that did not.
