@@ -1,7 +1,7 @@
 {
   "$comment": "Package @seed-core. Purpose: workspace member manifest. Why: separate installable unit under packages/*. Invariant: private, type module, test via node --test. trace:v1 id=impl.pkg-seed-core work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85",
   "name": "@carterlasalle/seed-core",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "test": "node --test",
