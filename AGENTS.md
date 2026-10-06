@@ -2947,6 +2947,17 @@ throws. State in `~/.seed`, never the user project. Secrets: none in repo;
   `.env.example` to `.env` (local only, never committed).
 - `.scc/scc.db` is 700M+ and untracked; never `git add -A` blindly without
   checking `git status` first.
+- npm and PyPI publish via **trusted publishing (OIDC)**, so there is no
+  `NPM_TOKEN` and there should never be one. If the npm job fails with an
+  authentication error, the fix is a trusted publisher configured on npmjs.com
+  for that package — naming this repo and `release.yml` — not a stored token.
+  `npm@>=11.5.1` is required and Node 22 ships npm 10, so the job upgrades it.
+- Homebrew's formula pins both the PyPI sdist and the npm tarball by sha256,
+  so it must be regenerated (`contrib/brew/bump.sh`) only **after** both
+  releases exist; bumping it early produces an uninstallable formula.
+- PyPI's JSON API can serve a stale `info.version` for a minute or two after a
+  successful publish; check `pypi.org/pypi/<pkg>/<version>/json` before
+  concluding the release failed.
 
 ---
 

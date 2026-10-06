@@ -9,6 +9,7 @@
     "prepublishOnly": "npm run build"
   },
   "license": "Apache-2.0",
+  "repository": "https://github.com/carterlasalle/seed-harness",
   "publishConfig": {
     "access": "public"
   },
