@@ -49,6 +49,37 @@ The guardian is the judge. The organism is everything that can change. SQLite st
 | Challenges | 10 deterministic mutation operators with baseline-pass/mutation-fail/repair-pass admission |
 | Research | Curated harness/paper/mechanism catalog (10/8/11 entries), validated in CI, refreshed without touching the organism |
 
+## Install
+
+Two paths: from source (to hack on Seed) or from the registries (to use Seed).
+
+### From source
+
+```sh
+git clone https://github.com/carterlasalle/seed-harness.git
+cd seed-harness
+corepack enable
+yarn install --immutable
+uv sync --locked --project python/seed_evolution
+cargo build --workspace
+```
+
+### From the registries
+
+Each surface ships separately; all four are currently at `0.1.5`.
+
+```sh
+brew install carterlasalle/tap/seed   # seed CLI + seed-gepa + seed-guardian
+npm install -g @carterlasalle/seed-cli
+cargo install seed-guardian --version 0.1.5
+pipx install "seed-evolution==0.1.5"  # or: uvx --from "seed-evolution==0.1.5" seed-gepa --help
+```
+
+Verify each install with `seed help` (CLI), `seed-gepa --help` (GEPA loop),
+and `seed-guardian` binding `~/.seed/run/guardian.sock` (see Run below).
+Regenerate the brew formula after each PyPI release with
+`contrib/brew/bump.sh <version>`.
+
 ## Quick start
 
 ### Prerequisites
@@ -60,30 +91,36 @@ The guardian is the judge. The organism is everything that can change. SQLite st
 - Docker (candidate eval sandbox)
 - Git
 
-```sh
-corepack enable
-yarn install --immutable
-uv sync --locked --project python/seed_evolution
-cargo build --workspace
-```
-
 Run the complete gate suite:
-
 ```sh
 yarn test && yarn typecheck && node scripts/verify-boundaries.ts && python3 scripts/seed-research-catalog.py
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 uv run --project python/seed_evolution pytest python/seed_evolution && yarn seed eval smoke
 ```
 
-### Run a task locally
+## Run
+
+The guardian is a Unix-socket daemon (`~/.seed/run/guardian.sock`, DB at
+`~/.seed/guardian.sqlite`). `run` and `eval run` need it live; `doctor`,
+`status`, `capabilities`, `champion`, `schema`, and `model` work offline.
+`seed run` also needs `OPENROUTER_API_KEY` for the model turn.
 
 ```sh
-cp .env.example .env   # SEED_GUARDIAN_URL + SEED_SCRATCH_ROOT; test-only SEED_STATE_DIR stays unset
-yarn seed run "rename the account abstraction"  # champion-pinned task + echo probe, recorded to ~/.seed
-yarn seed doctor  # exits 1 until SEED_GUARDIAN_URL is set (see .env.example); all other checks must pass
-yarn seed capabilities list
-yarn seed eval smoke   # fail-then-pass oracle contract on scratch copies (2 tasks)
+seed-guardian &                            # start the daemon (foreground: no args)
+ls -la ~/.seed/run/guardian.sock           # srw------- : bound and listening
+export OPENROUTER_API_KEY=...              # model turns fail loudly without it
+cp .env.example .env                       # SEED_GUARDIAN_URL + SEED_SCRATCH_ROOT
+seed run "rename the account abstraction"  # recorded to ~/.seed
+seed status                                # queue depth + recent runs
+seed champion show                         # guardian ref, local fallback offline
+seed capabilities list                    # builtin/python + fixtures/echo, no guardian needed
+seed eval smoke                            # fail-then-pass oracle contract, no guardian needed
+seed doctor                                # all green except docker-socket when Docker is off
 ```
+
+From a source checkout, prefix CLI calls with `yarn` (`yarn seed run ...`).
+`kill %1` (or the daemon PID) stops the guardian; a stale socket file is
+removed on the next bind, never followed blindly.
 
 For environment setup and local command examples, follow [CONTRIBUTING.md](CONTRIBUTING.md).
 
