@@ -1,4 +1,5 @@
 # Homebrew formula for Seed (self-evolving coding-agent harness).
+# trace:v1 id=impl.brew-seed-formula work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 #
 # Canonical source: contrib/brew/seed.rb in seed-harness.
 # Install with: brew install carterlasalle/tap/seed
@@ -40,10 +41,16 @@ class Seed < Formula
     # Python side: GEPA loop + oracles, installed isolated via pipx.
     system "pipx", "install", "--python", python, buildpath.to_s
     # Node side: the seed CLI from the npm tarball pinned in resources.
+    # Copy the staged tree into the prefix first: `npm install <dir>`
+    # symlinks the package dir itself, and the stage dir dies with the
+    # build tempdir. A physical copy keeps real files under libexec.
     resource("seed-cli").stage do
-      system "npm", "install", *std_npm_args(prefix: libexec), buildpath.to_s
+      mkdir_p libexec/"npm"
+      cp_r Dir.pwd, libexec/"npm/package"
     end
-    bin.install_symlink libexec/"bin/seed", libexec/"bin/seed-gepa"
+    system "npm", "install", "--prefix", (libexec/"npm/package").to_s, (libexec/"npm/package").to_s
+    bin.install_symlink libexec/"npm/package/dist/cli.js" => "seed"
+    bin.install_symlink libexec/"bin/seed-gepa"
     # Rust side: the guardian daemon ships via `cargo install seed-guardian`
     # from crates.io (same version pin as this formula's release tag).
   end
