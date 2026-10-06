@@ -41,17 +41,15 @@ class Seed < Formula
     # Python side: GEPA loop + oracles, installed isolated via pipx.
     system "pipx", "install", "--python", python, buildpath.to_s
     # Node side: the seed CLI from the npm tarball pinned in resources.
-    # Copy the staged tree into the prefix first: `npm install <dir>`
-    # symlinks the package dir itself, and the stage dir dies with the
-    # build tempdir. A physical copy keeps real files under libexec.
+    # std_npm_args must run inside the stage block: it shells out to
+    # `npm pack` in Dir.pwd, which only has package.json there.
     resource("seed-cli").stage do
-      mkdir_p libexec/"npm"
-      cp_r Dir.pwd, libexec/"npm/package"
+      system "npm", "install", *std_npm_args(prefix: libexec/"npm")
     end
-    system "npm", "install", *std_npm_args(prefix: (libexec/"npm/package").to_s), (libexec/"npm/package").to_s
-    bin.install_symlink libexec/"npm/package/dist/cli.js" => "seed"
+    bin.install_symlink libexec/"npm/lib/node_modules/@carterlasalle/seed-cli/dist/cli.js" => "seed"
     bin.install_symlink libexec/"bin/seed-gepa"
-    # from crates.io (same version pin as this formula's release tag).
+    # Rust side: `cargo install seed-guardian` from crates.io (same pin as
+    # this formula's release tag) is a documented manual step, not brew's.
   end
 
   test do
