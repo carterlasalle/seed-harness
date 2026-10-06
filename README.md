@@ -100,6 +100,39 @@ uv run --project python/seed_evolution pytest python/seed_evolution && yarn seed
 
 ## Run
 
+Two presentation modes over one engine. On a real terminal, `seed` with no
+arguments launches the interactive product; anything else stays headless.
+
+### Interactive
+
+```sh
+seed            # TTY: header, transcript, composer, status bar
+```
+
+- `/` opens a searchable slash menu; `Ctrl+P` opens the command palette.
+  Both are views of the same registry, so an extension that registers a
+  command makes it appear in each without a restart.
+- `/model` picks a model showing its measured profile (tasks evaluated,
+  cost/task, p50 latency, strengths), not just an id.
+- `/settings` is generated from one settings schema. Guardian-policy values
+  (promotion tolerance, probation, sandbox network) render locked: the
+  evolvable organism must not move its own grading criteria through the UI.
+- `/skills`, `/tools`, and `/registry` show what is discovered, where it came
+  from, and — for tools the router did not surface — why not.
+- `/doctor`, `/champion`, `/capabilities`, and `/status` run the same
+  functions the headless CLI calls.
+- Skills and capabilities are watched on disk: drop one in and it appears
+  without a reload.
+
+### Headless
+
+```sh
+seed run "rename the account abstraction"  # one task, recorded to ~/.seed
+seed run "..." --json                      # machine-readable
+seed eval smoke                            # fail-then-pass oracle contract
+seed doctor                                # environment and state checks
+```
+
 The guardian is a Unix-socket daemon (`~/.seed/run/guardian.sock`, DB at
 `~/.seed/guardian.sqlite`). `run` and `eval run` need it live; `doctor`,
 `status`, `capabilities`, `champion`, `schema`, and `model` work offline.
@@ -145,6 +178,7 @@ packages/
   seed-runtime/             Python primitive, sessions, ephemeral, telemetry, guardian client, organism
   seed-lab/                 Governor, crystallizer, mutation, challenges, profiler, GEPA client
   seed-cli/                 seed commands over ~/.seed state
+  seed-tui/                 Interactive frontend: live registry, transcript, dialogs (only Pi-importing package)
 crates/seed-guardian/       Immutable evaluator: JSON-RPC, WAL store, gates, archive, promotion
 python/seed_evolution/      GEPA contract, splits, statistics, trace analysis (uv)
 capabilities/               builtin/python, fixtures/echo (JSONL stdio)
@@ -154,7 +188,7 @@ prompts/                    Task-agent parts + lab role prompts
 schemas/                    Capability/event/experiment/hypothesis/model-profile JSON
 ```
 
-Guardian code never leaks into the organism: `scripts/verify-boundaries.ts` fails CI on `seed-guardian` imports or guardian-only RPC in the organism. Spec: `docs/specs/seed-v1-self-evolving-harness.md`. Architecture: `docs/ARCHITECTURE.md`. Baseline pin: `docs/BASELINE.md`.
+Guardian code never leaks into the organism: `scripts/verify-boundaries.ts` fails CI on `seed-guardian` imports or guardian-only RPC in the organism. The same gate keeps Pi confined to the frontend: `@earendil-works/pi-tui` may be imported only under `packages/seed-tui/`, never by `seed-core`, `seed-runtime`, `seed-lab`, `seed-cli`, `seed-guardian`, or `seed_evolution`, and `packages/seed-tui/src/registry/` stays terminal-UI-free so headless callers can build a registry without loading a TUI. Spec: `docs/specs/seed-v1-self-evolving-harness.md`. Architecture: `docs/ARCHITECTURE.md`. Baseline pin: `docs/BASELINE.md`.
 
 ## Safety model
 
@@ -173,7 +207,7 @@ The normative requirements are in the [spec](docs/specs/seed-v1-self-evolving-ha
 ## Test
 
 ```sh
-yarn test                                            # 110 node:test cases across packages/*/src
+yarn test                                            # 152 node:test cases across packages/*/src
 yarn typecheck                                       # tsc --noEmit per package
 cargo test --workspace                               # 19 guardian tests (invariants + roundtrip + promotion)
 uv run --project python/seed_evolution pytest python/seed_evolution  # 15 pytest cases
@@ -182,7 +216,7 @@ uv run --project python/seed_evolution pytest python/seed_evolution  # 15 pytest
 ## Lint
 
 ```sh
-yarn lint                                            # same 110 node:test cases (lint gate)
+yarn lint                                            # same 152 node:test cases (lint gate)
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings
 uv run --no-project ruff check python/seed_evolution scripts/generate-core-evals.py
 ```

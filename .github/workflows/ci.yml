@@ -44,7 +44,7 @@ jobs:
         run: uv run --project python/seed_evolution python scripts/generate-core-evals.py --seed 1337 --output evals/core/generated && test "$(find evals/core/generated -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 60
 
       - name: Build TS workspaces (dist for cross-package imports)
-        run: yarn exec tsc -p packages/seed-core/tsconfig.json && yarn exec tsc -p packages/seed-runtime/tsconfig.json && yarn exec tsc -p packages/seed-lab/tsconfig.json && yarn exec tsc -p packages/seed-cli/tsconfig.json
+        run: yarn exec tsc -p packages/seed-core/tsconfig.json && yarn exec tsc -p packages/seed-runtime/tsconfig.json && yarn exec tsc -p packages/seed-lab/tsconfig.json && yarn exec tsc -p packages/seed-cli/tsconfig.json && yarn exec tsc -p packages/seed-tui/tsconfig.json
 
       - name: TS tests (110 node:test cases)
         run: yarn test

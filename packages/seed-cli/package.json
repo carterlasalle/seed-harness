@@ -26,6 +26,7 @@
   "dependencies": {
     "@carterlasalle/seed-core": "0.1.5",
     "@carterlasalle/seed-lab": "0.1.5",
-    "@carterlasalle/seed-runtime": "0.1.5"
+    "@carterlasalle/seed-runtime": "0.1.5",
+    "@carterlasalle/seed-tui": "0.1.5"
   }
 }

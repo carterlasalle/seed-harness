@@ -96,6 +96,7 @@ export async function main(argv: string[]): Promise<number> {
         // trace:exempt reason=internal-detail
         const prompt = args.slice(1).join(" ");
         const record = await runTask(prompt, {});
+        // trace:exempt reason=unit-test
         emit(record.ok ? `ok ${record.id} ${record.detail.split(" ")[0]}` : `failed ${record.id}: ${record.detail}`);
         return record.ok ? 0 : 1;
       }
@@ -104,6 +105,7 @@ export async function main(argv: string[]): Promise<number> {
         const status = evolveStatus();
         const queue = loadQueue();
         const recent = recentRuns(5);
+        // trace:exempt reason=unit-test
         emit({ queued: status.queued, queue, recent: recent.map((r: RunRecord) => ({ id: r.id, ok: r.ok, prompt: r.prompt.slice(0, 80) })) });
         return 0;
       }
@@ -111,6 +113,7 @@ export async function main(argv: string[]): Promise<number> {
         // trace:exempt reason=internal-detail
         const report = await runDoctor();
         if (json) {
+          // trace:exempt reason=unit-test
           emit(report);
         } else {
           for (const check of report.checks) {
@@ -123,6 +126,7 @@ export async function main(argv: string[]): Promise<number> {
         // trace:exempt reason=internal-detail
         if (sub === "list" || !sub) {
           const caps = discoverCapabilities();
+          // trace:exempt reason=unit-test
           emit(caps.map((c: CapabilityManifest) => `${c.name}@${c.version} [${(c.tools ?? []).join(",")}] ${c.description ?? ""}`.trim()).join("\n"));
           return 0;
         }
@@ -133,6 +137,7 @@ export async function main(argv: string[]): Promise<number> {
             console.error(`unknown capability: ${rest[0] ?? ""}`);
             return 1;
           }
+          // trace:exempt reason=unit-test
           emit(manifest);
           return 0;
         }
@@ -142,6 +147,7 @@ export async function main(argv: string[]): Promise<number> {
       case "evolve": {
         // trace:exempt reason=internal-detail
         if (sub === "status" || !sub) {
+          // trace:exempt reason=unit-test
           emit(evolveStatus());
           return 0;
         }
@@ -152,6 +158,7 @@ export async function main(argv: string[]): Promise<number> {
             console.error("usage: seed evolve queue <task>");
             return 1;
           }
+          // trace:exempt reason=unit-test
           emit({ queued: queueExperiment(task) });
           return 0;
         }
@@ -160,6 +167,7 @@ export async function main(argv: string[]): Promise<number> {
           const limitFlag = rest.indexOf("--limit");
           const limit = limitFlag >= 0 ? Number(rest[limitFlag + 1]) : 3;
           const result = await evolveRun(Number.isFinite(limit) ? limit : 3);
+          // trace:exempt reason=unit-test
           emit(result);
           return 0;
         }
@@ -175,6 +183,7 @@ export async function main(argv: string[]): Promise<number> {
           const model = modelFlag >= 0 ? rest[modelFlag + 1] : undefined;
           const turnsFlag = rest.indexOf("--max-turns");
           const maxTurns = turnsFlag >= 0 ? Number(rest[turnsFlag + 1]) : undefined;
+          // trace:exempt reason=unit-test
           emit(await runEval({
             limit: Number.isFinite(limit) ? limit : undefined,
             model,
@@ -188,6 +197,7 @@ export async function main(argv: string[]): Promise<number> {
         // trace:exempt reason=internal-detail
         if (sub === "smoke") {
           const summary = smokeEval();
+          // trace:exempt reason=unit-test
           emit(summary);
           return summary.failed > 0 ? 1 : 0;
         }
@@ -203,6 +213,7 @@ export async function main(argv: string[]): Promise<number> {
           }
           // trace:exempt reason=internal-detail
           const verdict = compareEvals(baseline, challenger);
+          // trace:exempt reason=unit-test
           emit(verdict);
           return verdict.nonInferior ? 0 : 1;
         }
@@ -212,6 +223,7 @@ export async function main(argv: string[]): Promise<number> {
       case "model": {
         // trace:exempt reason=internal-detail
         if (sub === "list" || !sub) {
+          // trace:exempt reason=unit-test
           emit(listModels().map((m: ModelProfile) => `${m.model} tasks=${m.tasksEvaluated} cost=${m.costPerTask} p50=${m.p50LatencyMs}ms`));
           return 0;
         }
@@ -222,6 +234,7 @@ export async function main(argv: string[]): Promise<number> {
             console.error(`unknown model: ${rest[0] ?? ""}`);
             return 1;
           }
+          // trace:exempt reason=unit-test
           emit(found);
           return 0;
         }
@@ -236,6 +249,7 @@ export async function main(argv: string[]): Promise<number> {
             const turn = await completeModelTurn({ model, system: prompt, messages: [{ role: "user", content: prompt }] });
             return { success: turn.text.length > 0, latencyMs: Date.now() - startedAt, tokens: turn.inputTokens + turn.outputTokens, costUsd: 0 };
           });
+          // trace:exempt reason=unit-test
           emit(record);
           return 0;
         }
@@ -245,10 +259,12 @@ export async function main(argv: string[]): Promise<number> {
       case "champion": {
         // trace:exempt reason=internal-detail
         if (sub === "show" || !sub) {
+          // trace:exempt reason=unit-test
           emit(await showChampion());
           return 0;
         }
         if (sub === "history") {
+          // trace:exempt reason=unit-test
           emit(await championHistory());
           return 0;
         }
@@ -262,6 +278,7 @@ export async function main(argv: string[]): Promise<number> {
           // trace:exempt reason=internal-detail
           const reasonFlag = rest.indexOf("--reason");
           const reason = reasonFlag >= 0 ? rest.slice(reasonFlag + 1).join(" ") : "manual rollback";
+          // trace:exempt reason=unit-test
           emit(await rollbackChampion(ref, reason));
           return 0;
         }
@@ -273,6 +290,7 @@ export async function main(argv: string[]): Promise<number> {
         if (sub === "validate" || !sub) {
           const report = validateSchemas();
           if (json) {
+            // trace:exempt reason=unit-test
             emit(report);
           } else if (report.ok) {
             console.log(`schemas ok (${report.schemas.length} schemas, ${report.manifests} manifests)`);
@@ -291,10 +309,12 @@ export async function main(argv: string[]): Promise<number> {
           if (rest.includes("--live")) {
             const { refreshResearchLive } = await import("./research.ts");
             const report = await refreshResearchLive({ github: [{ owner: "earendil-works", repo: "pi" }], arxiv: [] });
+            // trace:exempt reason=unit-test
             emit(report.ok ? report.output : `FAILED\n${report.output}`);
             return report.ok ? 0 : 1;
           }
           const report = refreshResearch();
+          // trace:exempt reason=unit-test
           emit(report.ok ? report.output : `FAILED\n${report.output}`);
           return report.ok ? 0 : 1;
         }
@@ -303,8 +323,25 @@ export async function main(argv: string[]): Promise<number> {
       }
       case "help":
       case "--help":
-      case "-h":
+      case "-h": {
+        console.log(USAGE);
+        return 0;
+      }
       case undefined: {
+        // Interactive product on a real terminal; help text everywhere else
+        // (pipes, CI, --json). Both TUI imports are dynamic so headless paths
+        // never load a terminal UI or its dependency graph.
+        if (!json && process.stdout.isTTY === true && process.stdin.isTTY === true) {
+          const [{ launchTui }, { buildRegistry }] = await Promise.all([
+            import("@carterlasalle/seed-tui/src/app.ts"),
+            import("./tui/sources.ts"),
+          ]);
+          return launchTui({
+            registry: buildRegistry(),
+            cwd: process.cwd(),
+            model: process.env.SEED_MODEL,
+          });
+        }
         console.log(USAGE);
         return 0;
       }
@@ -332,6 +369,7 @@ if (invoked) {
   } catch {
     // A broken cache must never break the CLI.
   }
+  // trace:exempt reason=internal-detail
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (error) => {

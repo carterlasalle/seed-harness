@@ -12,7 +12,7 @@
   },
   "scripts": {
     "lint": "node --test \"packages/*/src/**/*.test.ts\"",
-    "typecheck": "tsc -p packages/seed-core --noEmit && tsc -p packages/seed-runtime --noEmit && tsc -p packages/seed-lab --noEmit && tsc -p packages/seed-cli --noEmit",
+    "typecheck": "tsc -p packages/seed-core --noEmit && tsc -p packages/seed-runtime --noEmit && tsc -p packages/seed-lab --noEmit && tsc -p packages/seed-cli --noEmit && tsc -p packages/seed-tui --noEmit",
     "test": "node --test \"packages/*/src/**/*.test.ts\"",
     "verify": "node scripts/verify-boundaries.ts && python3 scripts/seed-research-catalog.py",
     "research": "python3 scripts/seed-research-catalog.py",
