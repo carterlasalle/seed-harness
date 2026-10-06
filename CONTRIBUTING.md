@@ -39,15 +39,31 @@
 
 ### One-time operator setup
 
-Trusted publishing needs a publisher configured per package on the
-registry; the workflow cannot grant it to itself.
+Trusted publishing needs a publisher registered per package on the
+registry; the workflow cannot grant that to itself, and the npm registry
+requires an authenticated operator for it.
 
 - **PyPI**: trusted publisher for `seed-evolution` naming this repository,
   the `release.yml` workflow, and the `pypi` environment.
-- **npm**: trusted publisher for each of `@carterlasalle/seed-core`,
-  `seed-runtime`, `seed-lab`, `seed-tui`, and `seed-cli`, naming this
-  repository and the `release.yml` workflow.
+- **npm**: register the GitHub relationship for each package. Needs npm
+  `>= 11.21` for the `trust` command (`npm i -g npm@11.21.0`), then:
+
+  ```sh
+  npm login          # interactive; account must have 2FA satisfied
+  for pkg in seed-core seed-runtime seed-lab seed-tui seed-cli; do
+    npm trust github "@carterlasalle/${pkg}" \
+      --file release.yml \
+      --repo carterlasalle/seed-harness \
+      --allow-publish -y
+    npm trust list "@carterlasalle/${pkg}"
+  done
+  ```
+
+  The `--file` value must be exactly the workflow filename
+  (`release.yml`) and the repo must match the `repository` field in each
+  `package.json`, or the OIDC exchange is rejected.
 
 Until that exists, the npm publish job fails with an authentication error.
 Do not add a long-lived `NPM_TOKEN` to work around it: the tokenless path
-is the point.
+is the point. Once registered, re-running the release workflow for the
+tag publishes npm with no further code change.
