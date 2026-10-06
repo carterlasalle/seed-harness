@@ -332,17 +332,46 @@ export async function main(argv: string[]): Promise<number> {
         // (pipes, CI, --json). Both TUI imports are dynamic so headless paths
         // never load a terminal UI or its dependency graph.
         if (!json && process.stdout.isTTY === true && process.stdin.isTTY === true) {
-          const [{ launchTui }, { buildRegistry, watchSourcesFor }, { runInteractiveTask }] =
-            await Promise.all([
-              import("@carterlasalle/seed-tui/src/app.ts"),
-              import("./tui/sources.ts"),
-              import("./tui/engine.ts"),
-            ]);
+          const [
+            { launchTui },
+            { buildRegistry, watchSourcesFor, refreshToolRouting },
+            { runInteractiveTask },
+          ] = await Promise.all([
+            import("@carterlasalle/seed-tui/src/app.ts"),
+            import("./tui/sources.ts"),
+            import("./tui/engine.ts"),
+          ]);
+          const registry = buildRegistry();
+          // Settings are read per turn, so a model or effort chosen in the UI
+          // takes effect on the next prompt without a restart.
+          // trace:exempt reason=internal-detail
+          const settingNumber = (key: string, fallback: number): number => {
+            const value = registry.get("setting", key)?.value;
+            return typeof value === "number" ? value : fallback;
+          };
+          // trace:exempt reason=internal-detail
+          const settingString = (key: string, fallback: string): string => {
+            const value = registry.get("setting", key)?.value;
+            return typeof value === "string" ? value : fallback;
+          };
+          // trace:exempt reason=internal-detail
+          const currentModel = (): string =>
+            process.env.SEED_MODEL ?? settingString("session.model", "anthropic/claude-sonnet-4");
           return launchTui({
-            registry: buildRegistry(),
+            registry,
             cwd: process.cwd(),
-            model: process.env.SEED_MODEL,
-            runTask: (prompt, emit) => runInteractiveTask(prompt, emit),
+            model: currentModel(),
+            thinking: settingString("session.thinking", "medium"),
+            runTask: async (prompt, emit) => {
+              // Routing is recomputed per task so /tools can explain why a
+              // capability is or is not visible for the work in flight.
+              refreshToolRouting(registry, prompt);
+              return runInteractiveTask(prompt, emit, {
+                model: currentModel(),
+                thinking: settingString("session.thinking", "medium"),
+                maxTurns: settingNumber("session.maxTurns", 12),
+              });
+            },
             watchSources: watchSourcesFor(),
             evolution: async () => {
               // Real facts only: the champion from the guardian (with its

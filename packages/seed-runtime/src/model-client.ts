@@ -56,21 +56,19 @@ const PYTHON_TOOL_DEFINITION = {
   },
 } as const;
 
-// trace:v1 id=impl.rt-model-turn work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
-export async function completeModelTurn(init: {
+/**
+ * Build the chat-completions body. Exported so the wire contract — including
+ * that "off" sends no reasoning field at all — is directly testable without a
+ * network call.
+ */
+// trace:v1 id=impl.rt-model-body work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+export function buildChatRequest(init: {
   model?: string;
   system: string;
   messages: ModelMessage[];
   maxTokens?: number;
-}): Promise<ModelTurn> {
-  const apiKey = process.env.OPENROUTER_API_KEY ?? "";
-  if (!apiKey) {
-    throw new Error(
-      "model call needs OPENROUTER_API_KEY (budget: credentials, limit: key present, requested: missing); " +
-      "export it or add it to .env — see .env.example",
-    );
-  }
-  const model = init.model ?? DEFAULT_MODEL;
+  reasoning?: string;
+}): Record<string, unknown> {
   const wireMessages = [
     { role: "system", content: init.system },
     ...init.messages.map((m) =>
@@ -79,7 +77,40 @@ export async function completeModelTurn(init: {
         : { role: m.role, content: m.content },
     ),
   ];
+  return {
+    model: init.model ?? DEFAULT_MODEL,
+    messages: wireMessages,
+    tools: [PYTHON_TOOL_DEFINITION],
+    tool_choice: "auto",
+    max_tokens: init.maxTokens ?? 4096,
+    // Absent or "off" sends nothing: a provider that does not reason must not
+    // receive a meaningless parameter.
+    ...(init.reasoning && init.reasoning !== "off" ? { reasoning: { effort: init.reasoning } } : {}),
+  };
+}
+
+// trace:v1 id=impl.rt-model-turn work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+export async function completeModelTurn(init: {
+  model?: string;
+  system: string;
+  messages: ModelMessage[];
+  maxTokens?: number;
+  /**
+   * Requested reasoning effort (off|low|medium|high). Omitted or "off" sends
+   * nothing, so a provider that does not reason is never sent a meaningless
+   * parameter.
+   */
+  reasoning?: string;
+}): Promise<ModelTurn> {
+  const apiKey = process.env.OPENROUTER_API_KEY ?? "";
+  if (!apiKey) {
+    throw new Error(
+      "model call needs OPENROUTER_API_KEY (budget: credentials, limit: key present, requested: missing); " +
+      "export it or add it to .env — see .env.example",
+    );
+  }
   let response: Response;
+  const request = buildChatRequest(init);
   try {
     response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -89,13 +120,7 @@ export async function completeModelTurn(init: {
         "HTTP-Referer": "https://github.com/carterlasalle/seed-harness",
         "X-Title": "seed-harness",
       },
-      body: JSON.stringify({
-        model,
-        messages: wireMessages,
-        tools: [PYTHON_TOOL_DEFINITION],
-        tool_choice: "auto",
-        max_tokens: init.maxTokens ?? 4096,
-      }),
+      body: JSON.stringify(request),
     });
   } catch (error) {
     throw new Error(`model call failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -142,6 +167,6 @@ export async function completeModelTurn(init: {
     toolCall: parsed,
     inputTokens: payload.usage?.prompt_tokens ?? 0,
     outputTokens: payload.usage?.completion_tokens ?? 0,
-    model,
+    model: typeof request.model === "string" ? request.model : DEFAULT_MODEL,
   };
 }

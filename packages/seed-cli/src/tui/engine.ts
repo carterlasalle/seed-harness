@@ -22,6 +22,8 @@ export interface InteractiveTaskOptions {
   model?: string;
   maxTurns?: number;
   sessionId?: string;
+  /** Reasoning effort forwarded to the model call. */
+  thinking?: string;
 }
 
 /** First line of a code block, trimmed — the tool card's one-line summary. */
@@ -71,6 +73,7 @@ export async function runInteractiveTask(
     let lastAt = Date.now();
     const loop = await organism.runAgentLoop({
       ...(options.model ? { model: options.model } : {}),
+      ...(options.thinking ? { thinking: options.thinking } : {}),
       maxTurns: options.maxTurns ?? 12,
       onTurn: (turn) => {
         const now = Date.now();
