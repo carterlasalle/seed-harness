@@ -24,13 +24,14 @@ import type {
   ToolEntry,
 } from "@carterlasalle/seed-tui/src/registry/types.ts";
 import { registerCoreCommands } from "@carterlasalle/seed-tui/src/commands/builtin.ts";
+import type { WatchSource } from "@carterlasalle/seed-tui/src/registry/watch.ts";
 import { discoverCapabilities } from "../capabilities.ts";
 import { listModels } from "../models.ts";
 import { runDoctor } from "../doctor.ts";
 import { showChampion } from "../champion.ts";
 import { recentRuns, seedRoot, stateDir } from "../state.ts";
 import { SETTINGS_SCHEMA, isPersisted, tomlPath } from "./settings-schema.ts";
-import { discoverSkills } from "./skills.ts";
+import { discoverSkills, SKILL_ROOTS } from "./skills.ts";
 
 /** Minimal `[section] key = value` reader for ~/.seed/config.toml. */
 // trace:v1 id=impl.cli-tui-config-read work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
@@ -259,4 +260,26 @@ export function registerRenderers(registry: SeedRegistry): void {
       source: "builtin",
     });
   }
+}
+
+/**
+ * Filesystem-backed domains to keep live. Each source reuses the same
+ * discovery function startup used, so there is one discovery path per domain
+ * and the watcher can never disagree with the initial population.
+ */
+// trace:v1 id=impl.cli-tui-watch-sources work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function watchSourcesFor(root?: string): WatchSource[] {
+  const repo = seedRoot(root);
+  return [
+    {
+      domain: "skill",
+      dirs: SKILL_ROOTS.map((rel) => join(repo, rel)),
+      discover: () => discoverSkills(repo),
+    },
+    {
+      domain: "capability",
+      dirs: [join(repo, "capabilities", "builtin"), join(repo, "capabilities", "fixtures")],
+      discover: () => capabilityEntries(root),
+    },
+  ];
 }

@@ -332,14 +332,18 @@ export async function main(argv: string[]): Promise<number> {
         // (pipes, CI, --json). Both TUI imports are dynamic so headless paths
         // never load a terminal UI or its dependency graph.
         if (!json && process.stdout.isTTY === true && process.stdin.isTTY === true) {
-          const [{ launchTui }, { buildRegistry }] = await Promise.all([
-            import("@carterlasalle/seed-tui/src/app.ts"),
-            import("./tui/sources.ts"),
-          ]);
+          const [{ launchTui }, { buildRegistry, watchSourcesFor }, { runInteractiveTask }] =
+            await Promise.all([
+              import("@carterlasalle/seed-tui/src/app.ts"),
+              import("./tui/sources.ts"),
+              import("./tui/engine.ts"),
+            ]);
           return launchTui({
             registry: buildRegistry(),
             cwd: process.cwd(),
             model: process.env.SEED_MODEL,
+            runTask: (prompt, emit) => runInteractiveTask(prompt, emit),
+            watchSources: watchSourcesFor(),
           });
         }
         console.log(USAGE);
