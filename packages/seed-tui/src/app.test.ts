@@ -15,10 +15,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { SeedRegistry } from "./registry/registry.ts";
 import { registerCoreCommands } from "./commands/builtin.ts";
 import { registerThemes } from "./theme/theme.ts";
+import { createSessionStore } from "./session-store.ts";
 import { launchTui } from "./app.ts";
 import type { SeedTuiHandle } from "./app.ts";
 
@@ -296,6 +300,171 @@ test("Shift+Tab cycles the reasoning setting and the header follows", async () =
   const after = registry.get("setting", "session.thinking")?.value;
   assert.notEqual(after, before, "the setting advanced");
 
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("a session is persisted and can be resumed in a later run", async () => {
+  const sessionDir = mkdtempSync(join(tmpdir(), "seed-app-sessions-"));
+
+  // First run: do real work, which is what a session records.
+  const first = await start({ registry: seeded(), cwd: process.cwd(), sessionDir });
+  await submit(first.terminal, first.handle, "work worth keeping");
+  await submit(first.terminal, first.handle, "/quit");
+  await first.app;
+
+  assert.ok(existsSync(sessionDir), "the session directory was created");
+  const files = readdirSync(sessionDir).filter((n) => n.endsWith(".json"));
+  assert.equal(files.length, 1, "one session recorded");
+
+  // Second run: the same directory must offer that history.
+  const second = await start({ registry: seeded(), cwd: process.cwd(), sessionDir });
+  second.terminal.send("/sessions");
+  second.terminal.send("\r");
+  await second.handle.whenIdle();
+  second.terminal.output = "";
+  second.handle.renderNow();
+  assert.ok(second.terminal.output.includes("Sessions"), "the sessions dialog opened");
+  assert.ok(second.terminal.output.includes("work worth keeping"), "the saved session is listed by its prompt");
+  second.terminal.send("\u001b");
+  second.handle.renderNow();
+  await submit(second.terminal, second.handle, "/quit");
+  await second.app;
+});
+
+test("/new forks the next session and records the previous one as its parent", async () => {
+  const sessionDir = mkdtempSync(join(tmpdir(), "seed-app-new-"));
+  const { app, handle, terminal } = await start({ registry: seeded(), cwd: process.cwd(), sessionDir });
+
+  await submit(terminal, handle, "first session work");
+  const afterFirst = createSessionStore(sessionDir).list().length;
+  assert.equal(afterFirst, 1, "the first session exists once there is something to keep");
+
+  await submit(terminal, handle, "/new");
+  assert.ok(terminal.output.includes("new session"), "the fork was announced");
+  assert.equal(
+    createSessionStore(sessionDir).list().length,
+    1,
+    "/new alone writes nothing: an unused session leaves no file behind",
+  );
+
+  // The fork materialises on the next piece of real work.
+  await submit(terminal, handle, "second session work");
+  await submit(terminal, handle, "/quit");
+  await app;
+
+  const sessions = createSessionStore(sessionDir).list();
+  assert.equal(sessions.length, 2, "both sessions are on disk");
+  const child = sessions.find((s) => s.parent !== undefined);
+  assert.ok(child, "the new session records its parent, which makes the history a tree");
+});
+
+test("without a session directory nothing is written", async () => {
+  const { app, handle, terminal } = await start({ registry: seeded(), cwd: process.cwd() });
+  await submit(terminal, handle, "/sessions");
+  assert.ok(terminal.output.includes("session persistence is off"), "the app says so instead of failing");
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("/image reports a missing file rather than throwing", async () => {
+  const { app, handle, terminal } = await start({ registry: seeded(), cwd: process.cwd() });
+  await submit(terminal, handle, "/image ./definitely-not-here.png");
+  assert.ok(terminal.output.includes("no such file"));
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("/image shows a real file, falling back to facts when inline is impossible", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "seed-app-img-"));
+  const file = join(dir, "dot.png");
+  // Smallest possible valid PNG (1x1, transparent).
+  writeFileSync(
+    file,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
+  const { app, handle, terminal } = await start({ registry: seeded(), cwd: dir });
+  await submit(terminal, handle, "/image dot.png");
+  const out = terminal.output;
+  assert.ok(out.includes("dot.png"), "the card names the file");
+  assert.ok(
+    out.includes("1x1px") || out.includes("cells"),
+    "either it rendered inline or it reported the dimensions honestly",
+  );
+  await submit(terminal, handle, "/quit");
+  await app;
+});
+
+test("resuming a session replays its cards and keeps appending to it", async () => {
+  const sessionDir = mkdtempSync(join(tmpdir(), "seed-app-resume-"));
+
+  // First run leaves a recognisable transcript behind.
+  const first = await start({ registry: seeded(), cwd: process.cwd(), sessionDir });
+  await submit(first.terminal, first.handle, "remember-this-prompt");
+  await submit(first.terminal, first.handle, "/quit");
+  await first.app;
+
+  // Second run resumes it and must show the earlier content again.
+  const second = await start({ registry: seeded(), cwd: process.cwd(), sessionDir });
+  second.terminal.send("/sessions");
+  second.terminal.send("\r");
+  await second.handle.whenIdle();
+  second.terminal.send("\r"); // select the newest session
+  await second.handle.whenIdle();
+  second.handle.renderNow();
+  assert.ok(second.terminal.output.includes("resumed"), "the session was resumed");
+  assert.ok(
+    second.terminal.output.includes("remember-this-prompt"),
+    "the earlier prompt is replayed into the transcript",
+  );
+
+  // New work continues the resumed session rather than starting another.
+  await submit(second.terminal, second.handle, "/help");
+  await submit(second.terminal, second.handle, "/quit");
+  await second.app;
+
+  const store = createSessionStore(sessionDir);
+  assert.equal(store.list().length, 1, "resuming continues the session instead of forking one");
+});
+
+test("mouse mode runs the alternate-screen path without changing behaviour", async () => {
+  const { app, handle, terminal } = await start({
+    registry: seeded(),
+    cwd: process.cwd(),
+    mouse: true,
+  });
+  await submit(terminal, handle, "/ping");
+  assert.ok(terminal.output.includes("pong-from-registry"), "commands still dispatch");
+  await submit(terminal, handle, "/quit");
+  assert.equal(await app, 0, "and it still stops cleanly");
+});
+
+test("/evolve renders real candidates and archive members", async () => {
+  const { app, handle, terminal } = await start({
+    registry: seeded(),
+    cwd: process.cwd(),
+    evolution: () => ({
+      champion: "cand-9",
+      candidates: [
+        { id: "cand-9", ref: "cand-9", parent: "champion", status: "promoted" },
+        { id: "cand-8", ref: "cand-8", parent: "cand-9", status: "evaluating" },
+      ],
+      archive: [{ ref: "cand-7", novelty: 0.42, tags: ["router"] }],
+    }),
+  });
+  await submit(terminal, handle, "/evolve");
+  const out = terminal.output;
+  assert.ok(out.includes("cand-9"), "the promoted candidate is listed");
+  assert.ok(out.includes("cand-8"), "and the evaluating one");
+  assert.ok(out.includes("evaluating"), "with its status");
+  assert.ok(out.includes("cand-7"), "archive members are listed");
+  assert.ok(out.includes("0.42") || out.includes("novelty"), "with their novelty");
+  // The overlay owns focus while open, so close it before driving the editor.
+  terminal.send("\u001b");
+  handle.renderNow();
   await submit(terminal, handle, "/quit");
   await app;
 });

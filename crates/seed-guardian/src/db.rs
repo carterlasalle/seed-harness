@@ -32,6 +32,21 @@ pub struct Artifact<'a> {
     pub media_type: &'a str,
 }
 
+/// One candidate as stored, for read-only listing over RPC.
+// trace:v1 id=impl.db-candidate-row work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+pub struct CandidateRow {
+    /// Candidate id.
+    pub id: String,
+    /// Git ref the candidate evaluates.
+    pub ref_str: String,
+    /// Parent ref it branched from.
+    pub parent_ref: String,
+    /// Lifecycle status.
+    pub status: String,
+    /// Metrics JSON as stored.
+    pub metrics_json: String,
+}
+
 /// Open SQLite handle. Call `migrate` once before use.
 // trace:v1 id=impl.db-handle work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub struct Db {
@@ -249,6 +264,35 @@ impl Db {
             )
             .map_err(|e| format!("set_candidate_status: {e}"))?;
         Ok(())
+    }
+
+    /// Candidates newest-first.
+    ///
+    /// Read-only projection of candidate metadata: the organism may see that a
+    /// candidate exists and what status it reached, never the hidden oracle
+    /// outputs that promotion depends on.
+    // trace:v1 id=impl.db-candidate-list work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+    pub fn list_candidates(&self) -> Result<Vec<CandidateRow>, String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, ref_str, parent_ref, status, metrics FROM candidates ORDER BY created_at DESC, id DESC")
+            .map_err(|e| format!("list_candidates: {e}"))?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(CandidateRow {
+                    id: r.get(0)?,
+                    ref_str: r.get(1)?,
+                    parent_ref: r.get(2)?,
+                    status: r.get(3)?,
+                    metrics_json: r.get(4)?,
+                })
+            })
+            .map_err(|e| format!("list_candidates: {e}"))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(|e| format!("list_candidates: {e}"))?);
+        }
+        Ok(out)
     }
 
     /// Append a champion pointer row.

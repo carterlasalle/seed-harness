@@ -370,3 +370,66 @@ fn i12_schema_version_mismatch_rejected() {
     assert_eq!(cfg.schema_version, config::SCHEMA_VERSION);
     assert!(models::provisional("unseen-model").strengths.is_empty());
 }
+
+#[test]
+// trace:v1 id=impl.inv-i13 work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+// trace:exempt reason=unit-test
+fn i13_candidate_and_archive_lists_are_agent_readable() {
+    let db = tmp_db("i13");
+    db.insert_candidate("cand-1", "cand-1", "champion", "created", "{}")
+        .unwrap();
+    db.insert_candidate(
+        "cand-2",
+        "cand-2",
+        "cand-1",
+        "evaluating",
+        r#"{"quality":0.9}"#,
+    )
+    .unwrap();
+
+    let listed = call(&db, "candidate.list", Value::Null);
+    let candidates = listed
+        .get("result")
+        .and_then(|r| r.get("candidates"))
+        .and_then(Value::as_array)
+        .expect("candidate.list returns a list");
+    assert_eq!(candidates.len(), 2, "both candidates are visible");
+    let ids: Vec<&str> = candidates
+        .iter()
+        .filter_map(|c| c.get("id").and_then(Value::as_str))
+        .collect();
+    assert!(ids.contains(&"cand-1") && ids.contains(&"cand-2"));
+    // Metadata only: a candidate row carries status and metrics, never the
+    // hidden oracle outputs that decide promotion.
+    let second = candidates
+        .iter()
+        .find(|c| c.get("id").and_then(Value::as_str) == Some("cand-2"))
+        .unwrap();
+    assert_eq!(
+        second.get("status").and_then(Value::as_str),
+        Some("evaluating")
+    );
+    assert_eq!(second.get("parent").and_then(Value::as_str), Some("cand-1"));
+
+    archive::insert(
+        &db,
+        &archive::ArchiveEntry {
+            candidate_ref: "cand-1".to_string(),
+            metrics: metrics(),
+            tags: vec!["router".to_string()],
+            novelty: 0.5,
+        },
+    )
+    .unwrap();
+    let archived = call(&db, "archive.list", Value::Null);
+    let members = archived
+        .get("result")
+        .and_then(|r| r.get("members"))
+        .and_then(Value::as_array)
+        .expect("archive.list returns members");
+    assert_eq!(members.len(), 1);
+    assert_eq!(
+        members[0].get("ref").and_then(Value::as_str),
+        Some("cand-1")
+    );
+}

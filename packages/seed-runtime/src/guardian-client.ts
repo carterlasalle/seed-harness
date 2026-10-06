@@ -38,6 +38,11 @@ export const AGENT_METHODS = [
   "champion.show",
   "champion.history",
   "champion.rollback",
+  // Read-only provenance for the interactive frontend: which candidates exist
+  // and what reached the archive. Metadata only — hidden oracle outputs stay
+  // guardian-side, so these grant visibility without influence.
+  "candidate.list",
+  "archive.list",
 ] as const;
 
 export type AgentMethod = (typeof AGENT_METHODS)[number];

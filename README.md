@@ -119,10 +119,21 @@ seed            # TTY: header, transcript, composer, status bar
   evolvable organism must not move its own grading criteria through the UI.
 - `/skills`, `/tools`, and `/registry` show what is discovered, where it came
   from, and — for tools the router did not surface — why not.
+- `/evolve` reads the guardian directly: champion lineage, candidates with
+  their status, Pareto archive members with novelty, the experiment queue,
+  and friction from recorded runs.
+- `/sessions` lists saved sessions as a resume tree; selecting one replays its
+  transcript and continues it. `/new` forks, recording the previous session as
+  the new one's parent. Sessions are written when there is real work, so an
+  unused session leaves no file behind.
+- `/image <path>` renders a PNG/JPEG/GIF/WebP inline when the terminal supports
+  it and reports the file's facts when it does not. Images are never required.
 - `/doctor`, `/champion`, `/capabilities`, and `/status` run the same
   functions the headless CLI calls.
 - Skills and capabilities are watched on disk: drop one in and it appears
   without a reload.
+- Mouse is opt-in (`SEED_TUI_MOUSE=1`): it switches to the alternate screen, so
+  the default keeps your terminal's own scrollback.
 
 ### Headless
 

@@ -23,6 +23,7 @@ import type {
   SettingsListTheme,
 } from "@earendil-works/pi-tui";
 import type { SeedRegistry } from "../registry/registry.ts";
+import type { StoredSession } from "../session-store.ts";
 import type { Styler } from "../theme/theme.ts";
 
 // trace:v1 id=impl.tui-select-theme work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
@@ -235,10 +236,51 @@ export function buildRegistryDialog(
   return list;
 }
 
+/** Sessions → resume picker, indented by resume lineage so it reads as a tree. */
+// trace:v1 id=impl.tui-build-sessions-dialog work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function buildSessionsDialog(
+  entries: readonly { session: StoredSession; depth: number }[],
+  style: Styler,
+  onPick: (id: string) => void,
+  onCancel: () => void,
+): SelectList {
+  const items: SelectItem[] = entries.map(({ session, depth }) => {
+    const when = session.at.replace("T", " ").slice(0, 16);
+    const indent = depth > 0 ? `${"  ".repeat(depth)}↳ ` : "";
+    const first = session.prompt ? session.prompt.slice(0, 56) : "(no prompt)";
+    return {
+      value: session.id,
+      label: `${indent}${when}`,
+      description: `${first} · ${session.cards.length} cards${session.model ? ` · ${session.model}` : ""}`,
+    };
+  });
+  const list = new SelectList(
+    items.length > 0 ? items : [{ value: "", label: "no saved sessions", description: "" }],
+    14,
+    selectTheme(style),
+  );
+  list.onSelect = (item) => onPick(item.value);
+  list.onCancel = onCancel;
+  return list;
+}
+
 /** Evolution view. Data comes from the host; absent data renders as "—". */
 // trace:v1 id=impl.tui-build-evolution-dialog work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export function buildEvolutionDialog(
-  data: { champion?: string; candidates?: { ref: string; note: string }[]; friction?: string[] },
+  data: {
+    champion?: string;
+    /** Champion history, newest last — the lineage the guardian holds. */
+    lineage?: { ref: string; reason: string }[];
+    /** Candidates the guardian recorded, newest first. */
+    candidates?: { id: string; ref: string; parent: string; status: string }[];
+    /** Pareto archive members the guardian retained. */
+    archive?: { ref: string; novelty: number; tags: string[] }[];
+    /** Queued experiment prompts: the candidate pipeline as the CLI sees it. */
+    queued?: string[];
+    /** Recorded eval results, newest last. */
+    evals?: { id: string; passed: number; total: number }[];
+    friction?: string[];
+  },
   style: Styler,
   onCancel: () => void,
 ): SelectList {
@@ -246,14 +288,48 @@ export function buildEvolutionDialog(
     { value: "champion", label: `champion ${data.champion ?? "—"}`, description: "current deployed reference" },
   ];
   // trace:exempt reason=internal-detail
+  for (const entry of data.lineage ?? []) {
+    items.push({ value: `lineage:${entry.ref}`, label: `  ↳ ${entry.ref}`, description: entry.reason || "no reason recorded" });
+  }
+  // trace:exempt reason=internal-detail
   for (const candidate of data.candidates ?? []) {
-    items.push({ value: candidate.ref, label: `↑ ${candidate.ref}`, description: candidate.note });
+    // A promoted candidate is the champion; mark it so the list reads as a
+    // lineage rather than an undifferentiated pile.
+    const mark = candidate.ref === data.champion ? "●" : "↑";
+    const parent = candidate.parent ? ` · from ${candidate.parent}` : "";
+    items.push({
+      value: `candidate:${candidate.id}`,
+      label: `${mark} ${candidate.ref}`,
+      description: `${candidate.status}${parent}`,
+    });
+  }
+  // trace:exempt reason=internal-detail
+  for (const member of data.archive ?? []) {
+    const tags = member.tags.length > 0 ? ` · ${member.tags.join("/")}` : "";
+    items.push({
+      value: `archive:${member.ref}`,
+      label: `◆ ${member.ref}`,
+      description: `archived · novelty ${member.novelty.toFixed(2)}${tags}`,
+    });
+  }
+  // trace:exempt reason=internal-detail
+  for (const task of data.queued ?? []) {
+    items.push({ value: `queued:${task}`, label: "↑ queued", description: task.slice(0, 90) });
+  }
+  // trace:exempt reason=internal-detail
+  for (const result of data.evals ?? []) {
+    const rate = result.total > 0 ? Math.round((result.passed / result.total) * 100) : 0;
+    items.push({
+      value: `eval:${result.id}`,
+      label: `eval ${result.id}`,
+      description: `${result.passed}/${result.total} passed (${rate}%)`,
+    });
   }
   // trace:exempt reason=internal-detail
   for (const line of data.friction ?? []) {
-    items.push({ value: `friction:${line}`, label: `friction`, description: line });
+    items.push({ value: `friction:${line}`, label: "friction", description: line });
   }
-  const list = new SelectList(items, 14, selectTheme(style));
+  const list = new SelectList(items, 16, selectTheme(style));
   list.onCancel = onCancel;
   return list;
 }

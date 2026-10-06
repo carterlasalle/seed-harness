@@ -13,9 +13,10 @@ import { showCapability, discoverCapabilities } from "./capabilities.ts";
 import type { CapabilityManifest } from "./capabilities.ts";
 import { runDoctor } from "./doctor.ts";
 import { runTask } from "./run.ts";
-import { evolveRun, evolveStatus, queueExperiment } from "./evolve.ts";
+import { evolveRun, evolveStatus, listArchive, listCandidates, queueExperiment } from "./evolve.ts";
 import { compareEvals, runEval, smokeEval } from "./eval.ts";
-import { listEvalResults, loadQueue, recentRuns } from "./state.ts";
+import { listEvalResults, loadQueue, recentRuns, stateDir } from "./state.ts";
+import { join } from "node:path";
 import type { EvalResultSummary, ModelProfile, RunRecord } from "./state.ts";
 import { listModels, profileModel } from "./models.ts";
 import { championHistory, rollbackChampion, showChampion } from "./champion.ts";
@@ -362,6 +363,10 @@ export async function main(argv: string[]): Promise<number> {
             cwd: process.cwd(),
             model: currentModel(),
             thinking: settingString("session.thinking", "medium"),
+            // Sessions persist under the state dir so they can be resumed.
+            sessionDir: join(stateDir(), "sessions"),
+            // Mouse is opt-in because it costs the terminal's scrollback.
+            mouse: process.env.SEED_TUI_MOUSE === "1",
             runTask: async (prompt, emit) => {
               // Routing is recomputed per task so /tools can explain why a
               // capability is or is not visible for the work in flight.
@@ -374,11 +379,16 @@ export async function main(argv: string[]): Promise<number> {
             },
             watchSources: watchSourcesFor(),
             evolution: async () => {
-              // Real facts only: the champion from the guardian (with its
-              // local fallback) and friction markers from recorded runs.
-              // Candidates stay empty until a candidate store is surfaced,
-              // rather than being invented for the dialog.
+              // Real facts only, read from the guardian and the local record:
+              // lineage, candidates, the Pareto archive, the experiment queue,
+              // and friction. An unreachable guardian yields empty lists
+              // rather than fabricated entries.
               const champion = await showChampion();
+              const [history, candidates, archive] = await Promise.all([
+                championHistory(),
+                listCandidates(),
+                listArchive(),
+              ]);
               const runs = recentRuns(8);
               const friction = runs
                 .map((run) => {
@@ -387,7 +397,17 @@ export async function main(argv: string[]): Promise<number> {
                   return mark && mark !== "none" ? `${run.id}: ${mark}` : null;
                 })
                 .filter((line): line is string => line !== null);
-              return { champion: champion.ref, candidates: [], friction };
+              return {
+                champion: champion.ref,
+                lineage: history.slice(-6).map((entry) => ({ ref: entry.ref, reason: entry.reason })),
+                candidates,
+                archive,
+                queued: loadQueue().slice(0, 6),
+                evals: listEvalResults()
+                  .slice(-5)
+                  .map((result) => ({ id: result.id, passed: result.passed, total: result.total })),
+                friction,
+              };
             },
           });
         }
