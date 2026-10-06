@@ -2,7 +2,7 @@
 # Stdlib-only runtime; `seed-gepa` entry point lands under TASK-SEED-7QCRZK5B.
 [project]
 name = "seed-evolution"
-version = "0.1.5"
+version = "0.2.0"
 description = "Seed evolution loop: GEPA contract, scientist, mutation reports"
 readme = "README.md"
 requires-python = ">=3.10"
