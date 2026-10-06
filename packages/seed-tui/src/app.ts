@@ -21,12 +21,20 @@ import {
   Editor,
   ProcessTerminal,
   ScrollView,
+  TuiAltScreen,
   TuiMainScreen,
+  VStack,
+  getImageDimensions,
+  isViewportTUI,
   matchesKey,
+  renderImage,
 } from "@earendil-works/pi-tui";
+import { existsSync, readFileSync } from "node:fs";
+import { extname, resolve } from "node:path";
 import type { Component, OverlayHandle, SlashCommand, Terminal } from "@earendil-works/pi-tui";
 import { HeaderBar, StatusBar } from "./components/chrome.ts";
 import { Transcript } from "./components/transcript.ts";
+import type { Card } from "./components/transcript.ts";
 import { registerCoreCommands, registerCoreKeybindings } from "./commands/builtin.ts";
 import { classifyError } from "./errors.ts";
 import {
@@ -34,12 +42,14 @@ import {
   buildModelDialog,
   buildPalette,
   buildRegistryDialog,
+  buildSessionsDialog,
   buildSettingsDialog,
   buildSkillsDialog,
   buildToolsDialog,
   dialogFrame,
   selectTheme,
 } from "./components/dialogs.ts";
+import { createSessionStore, sessionTree } from "./session-store.ts";
 import type { SeedRegistry } from "./registry/registry.ts";
 import { watchRegistry } from "./registry/watch.ts";
 import type { WatchSource } from "./registry/watch.ts";
@@ -56,6 +66,18 @@ export type TurnEvent =
   | { kind: "tool-done"; name: string; ok: boolean; durationMs?: number }
   | { kind: "error"; error: unknown };
 
+/** What the `/evolve` dialog renders. Every field is host-supplied fact. */
+// trace:exempt reason=internal-detail
+export interface EvolutionData {
+  champion?: string;
+  lineage?: { ref: string; reason: string }[];
+  candidates?: { id: string; ref: string; parent: string; status: string }[];
+  archive?: { ref: string; novelty: number; tags: string[] }[];
+  queued?: string[];
+  evals?: { id: string; passed: number; total: number }[];
+  friction?: string[];
+}
+
 // trace:exempt reason=internal-detail
 export interface SeedTuiHost {
   registry: SeedRegistry;
@@ -65,15 +87,12 @@ export interface SeedTuiHost {
   /** Called once the UI has stopped, before launchTui resolves. */
   onQuit?: () => void;
   /** Evolution data for the `/evolve` dialog; the host owns these facts. */
-  evolution?: () => {
-    champion?: string;
-    candidates?: { ref: string; note: string }[];
-    friction?: string[];
-  } | Promise<{
-    champion?: string;
-    candidates?: { ref: string; note: string }[];
-    friction?: string[];
-  }>;
+  evolution?: () => EvolutionData | Promise<EvolutionData>;
+  /**
+   * Directory for saved sessions. When set, the transcript is persisted and
+   * `/sessions` can resume one; when absent the app keeps nothing on disk.
+   */
+  sessionDir?: string;
   model?: string;
   thinking?: string;
   /**
@@ -93,6 +112,12 @@ export interface SeedTuiHost {
   watchSources?: readonly WatchSource[];
   /** Debounce window for watch refreshes, in ms. */
   watchDebounceMs?: number;
+  /**
+   * Enable mouse reporting. Off by default: mouse is an affordance, not a
+   * requirement, and enabling it switches to the alternate screen, which
+   * trades terminal scrollback for a clickable viewport.
+   */
+  mouse?: boolean;
 }
 
 /** Deterministic control surface handed to `onReady`. */
@@ -103,6 +128,16 @@ export interface SeedTuiHandle {
   /** Resolves once every submitted command/turn has finished. */
   whenIdle: () => Promise<void>;
 }
+
+/** Mime types the inline image path understands. */
+// trace:exempt reason=const-data
+const MIME_BY_EXT: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
 
 /** Commands as the slash-autocomplete provider wants them. */
 // trace:v1 id=impl.tui-slash-commands work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
@@ -120,10 +155,36 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
   let style: Styler = createStyler();
   let activeTheme = "seed";
   const terminal = host.terminal ?? new ProcessTerminal();
-  const tui = new TuiMainScreen(terminal);
+  // Mouse reporting only exists on the alternate screen, so it is opt-in:
+  // the default keeps the terminal's own scrollback, which matters more than
+  // clicking for most sessions.
+  const tui = host.mouse === true ? new TuiAltScreen(terminal, undefined, undefined, { mouse: true }) : new TuiMainScreen(terminal);
   const header = new HeaderBar(style);
   const status = new StatusBar(style);
   const transcript = new Transcript(style);
+  // Session persistence is optional: with no sessionDir the app keeps nothing
+  // on disk, which is what tests and throwaway runs want.
+  const store = host.sessionDir ? createSessionStore(host.sessionDir) : null;
+  // A session file is created lazily, on the first *substantive* card. Booting
+  // and quitting without doing anything therefore leaves no empty file behind,
+  // and resuming continues the resumed session rather than a fresh one.
+  let currentSession: string | null = null;
+  // Set by /new so the next session records the one it was forked from.
+  let pendingParent: string | undefined;
+  const SUBSTANTIVE: ReadonlySet<Card["kind"]> = new Set(["user", "assistant", "tool", "error", "image"]);
+  // trace:exempt reason=internal-detail
+  if (store) {
+    transcript.setObserver(({ type, card }) => {
+      // trace:exempt reason=internal-detail
+      if (!currentSession) {
+        if (!SUBSTANTIVE.has(card.kind)) return;
+        currentSession = store.create({ parent: pendingParent, cwd: host.cwd, model: host.model });
+        pendingParent = undefined;
+      }
+      if (type === "append") store.append(currentSession, card);
+      else store.patch(currentSession, card.id, card);
+    });
+  }
   const scroll = new ScrollView(transcript, { follow: "end", primary: true, scrollbar: "auto" });
   const editor = new Editor(tui, {
     borderColor: (text: string) => style("border", text),
@@ -205,7 +266,7 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
   };
 
   // trace:exempt reason=internal-detail
-  const openDialog = (name: string, args?: string): void => {
+  const openDialog = async (name: string, args?: string): Promise<void> => {
     // trace:exempt reason=internal-detail
     switch (name) {
       case "model":
@@ -261,13 +322,44 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
       case "registry":
         openOverlay("Registry", buildRegistryDialog(registry, style, closeOverlay), closeOverlay);
         return;
-      case "evolution":
+      case "sessions": {
         // trace:exempt reason=internal-detail
-        void (async () => {
-          const data = (await host.evolution?.()) ?? {};
-          openOverlay("Evolution", buildEvolutionDialog(data, style, closeOverlay), closeOverlay);
-        })();
+        if (!store) {
+          print("session persistence is off for this run");
+          return;
+        }
+        openOverlay(
+          "Sessions",
+          buildSessionsDialog(
+            sessionTree(store.list()),
+            style,
+            (id) => {
+              const session = id ? store.load(id) : null;
+              // trace:exempt reason=internal-detail
+              if (session) {
+                transcript.setCards(session.cards);
+                currentSession = session.id;
+                // Resuming continues that session; it is not a fork.
+                pendingParent = undefined;
+                print(`resumed ${session.id} (${session.cards.length} cards)`);
+              }
+              closeOverlay();
+              repaint();
+            },
+            closeOverlay,
+          ),
+          closeOverlay,
+        );
         return;
+      }
+      case "evolution": {
+        // Awaiting here is what lets `whenIdle()` reflect that the dialog is
+        // ready; a floating promise would render an empty dialog and leave
+        // callers unable to observe completion.
+        const data = (await host.evolution?.()) ?? {};
+        openOverlay("Evolution", buildEvolutionDialog(data, style, closeOverlay), closeOverlay);
+        return;
+      }
       default:
         print(`no dialog named ${JSON.stringify(name)}${args ? ` (args: ${args})` : ""}`);
     }
@@ -337,6 +429,54 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     print(`theme → ${chosen.name}`);
   };
 
+  /**
+   * Show an image file inline when the terminal can, and say plainly what it
+   * is when it cannot. Images are an affordance: nothing in the session
+   * depends on being able to see them.
+   */
+  // trace:v1 id=impl.tui-show-image work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+  const showImage = (requested: string): void => {
+    // trace:exempt reason=internal-detail
+    if (requested.length === 0) {
+      print("usage: /image <path>");
+      return;
+    }
+    const path = resolve(host.cwd, requested);
+    // trace:exempt reason=internal-detail
+    if (!existsSync(path)) {
+      print(`no such file: ${path}`);
+      return;
+    }
+    // Check the type before reading: there is no point slurping a large
+    // non-image file just to reject it.
+    const mime = MIME_BY_EXT[extname(path).toLowerCase()];
+    // trace:exempt reason=internal-detail
+    if (!mime) {
+      print(`${path} is not an image (expected ${Object.keys(MIME_BY_EXT).join(", ")})`);
+      return;
+    }
+    let base64 = "";
+    try {
+      base64 = readFileSync(path).toString("base64");
+    } catch (error) {
+      print(`could not read ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    const dimensions = getImageDimensions(base64, mime);
+    const drawn = dimensions ? renderImage(base64, dimensions, { maxWidthCells: 48, maxHeightCells: 24 }) : null;
+    const body: string[] = [];
+    let summary: string;
+    // trace:exempt reason=internal-detail
+    if (drawn) {
+      body.push(drawn.sequence);
+      summary = `${drawn.columns}x${drawn.rows} cells`;
+    } else {
+      const size = dimensions ? `${dimensions.widthPx}x${dimensions.heightPx}px · ` : "";
+      summary = `${size}${mime} · not rendered inline by this terminal`;
+    }
+    transcript.append({ kind: "image", title: path.replace(host.cwd, "."), body, summary });
+  };
+
   // The app drives these commands, so it binds the real handlers here rather
   // than relying on whatever a headless builder registered. Re-registering the
   // same ids replaces them, and every replacement publishes an event.
@@ -348,6 +488,21 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     },
     onQuit: shutdown,
     onTheme: (args) => applyTheme(args.trim()),
+    onNew: () => {
+      // trace:exempt reason=internal-detail
+      if (!store) {
+        print("session persistence is off for this run");
+        return;
+      }
+      // The next session records the current one as parent, which is what
+      // gives /sessions its tree shape. Nothing is written until the first
+      // substantive card, so an unused /new leaves no file behind.
+      pendingParent = currentSession ?? undefined;
+      currentSession = null;
+      transcript.setCards([]);
+      print(`new session${pendingParent ? ` from ${pendingParent}` : ""}`);
+    },
+    onImage: (args) => showImage(args.trim()),
   });
   registerCoreKeybindings(registry);
 
@@ -373,7 +528,10 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
         print(`unknown command /${name} — try /help`);
         return;
       }
-      transcript.append({ kind: "user", title: trimmed, body: [] });
+      // A slash command is an operation, not conversation: it produces its own
+      // output and must not enter the transcript as a user turn. Persisting it
+      // would also create a session just from opening a dialog such as
+      // /sessions, which then shadows the history you meant to pick.
       try {
         await command.handler(rest.join(" "), { ...ctx, args: rest.join(" ") });
       } catch (error) {
@@ -467,10 +625,16 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
   });
   status.update({ revision: registry.revision, queueDepth: 0 });
 
-  tui.addChild(header);
-  tui.addChild(scroll);
-  tui.addChild(editor);
-  tui.addChild(status);
+  // trace:exempt reason=internal-detail
+  if (isViewportTUI(tui)) {
+    // The alternate screen renders one layout root rather than a child list.
+    tui.setLayoutRoot(new VStack([header, scroll, editor, status]));
+  } else {
+    tui.addChild(header);
+    tui.addChild(scroll);
+    tui.addChild(editor);
+    tui.addChild(status);
+  }
   tui.setFocus(editor);
 
   transcript.append({

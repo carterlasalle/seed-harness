@@ -13,7 +13,7 @@
 // Public types/functions: Card, CardKind, Transcript.
 
 import { Markdown, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import type { Component, MarkdownTheme } from "@earendil-works/pi-tui";
+import type { Component, MarkdownTheme, TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
 import type { Styler } from "../theme/theme.ts";
 import type { SeedError } from "../errors.ts";
 
@@ -42,7 +42,7 @@ export function markdownTheme(style: Styler): MarkdownTheme {
 }
 
 // trace:v1 id=impl.tui-card-kind work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
-export type CardKind = "user" | "assistant" | "tool" | "thinking" | "error" | "notice";
+export type CardKind = "user" | "assistant" | "tool" | "thinking" | "error" | "notice" | "image";
 
 // trace:exempt reason=internal-detail
 export interface Card {
@@ -71,6 +71,9 @@ export function renderCard(
   renderAssistant?: (text: string, width: number) => string[],
 ): string[] {
   const out: string[] = [];
+  // Per-card collapse is folded in here so the rule holds wherever a card is
+  // rendered, not only through Transcript.
+  const open = expanded && card.collapsed !== true;
   const border = style("border", "─".repeat(Math.max(0, Math.min(width, 60))));
   // trace:exempt reason=internal-detail
   if (card.kind === "user") {
@@ -84,6 +87,13 @@ export function renderCard(
     return out;
   }
   // trace:exempt reason=internal-detail
+  if (card.kind === "image") {
+    out.push(style("accent", `▧ ${card.title}`));
+    for (const line of card.body) out.push(line);
+    if (card.summary) out.push(style("dim", card.summary));
+    return out;
+  }
+  // trace:exempt reason=internal-detail
   if (card.kind === "error" && card.error) {
     const e = card.error;
     out.push(border);
@@ -91,7 +101,7 @@ export function renderCard(
     for (const line of wrap(e.message.split("\n")[0] ?? "", width)) out.push(style("text", line));
     if (e.hint) for (const line of wrap(e.hint, width)) out.push(style("warn", line));
     // trace:exempt reason=internal-detail
-    if (expanded && e.detail) {
+    if (open && e.detail) {
       // trace:exempt reason=internal-detail
       for (const line of e.detail.split("\n").slice(0, 12)) {
         out.push(style("dim", truncateToWidth(line, width, "")));
@@ -113,7 +123,7 @@ export function renderCard(
     const head = `${glyph} ${style("accent", card.title)} ${style("dim", card.summary ?? "")} ${duration}`.trim();
     out.push(truncateToWidth(head, width, ""));
     // trace:exempt reason=internal-detail
-    if (expanded && card.body.length > 0) {
+    if (open && card.body.length > 0) {
       out.push(border);
       for (const line of card.body.slice(0, 20)) out.push(style("dim", truncateToWidth(line, width, "")));
       out.push(border);
@@ -121,7 +131,7 @@ export function renderCard(
     return out;
   }
   // assistant: markdown when a renderer is supplied, plain wrap otherwise.
-  const prose = [card.title, ...(expanded ? card.body : [])].join("\n");
+  const prose = [card.title, ...(open ? card.body : [])].join("\n");
   // trace:exempt reason=internal-detail
   if (renderAssistant) {
     out.push(...renderAssistant(prose, width));
@@ -129,7 +139,7 @@ export function renderCard(
   }
   for (const line of wrap(card.title, width)) out.push(style("text", line));
   // trace:exempt reason=internal-detail
-  if (expanded) {
+  if (open) {
     for (const line of card.body) out.push(style("text", truncateToWidth(line, width, "")));
   }
   return out;
@@ -149,12 +159,32 @@ export class Transcript implements Component {
   private showThinking = true;
   private counter = 0;
   private markdown: Markdown;
+  private observer?: (event: { type: "append" | "patch"; card: Card }) => void;
+  private readonly ranges: { card: Card; start: number; end: number }[] = [];
   onDebug?: () => void;
 
   // trace:exempt reason=internal-detail
   constructor(style: Styler) {
     this.style = style;
     this.markdown = new Markdown("", 0, 0, markdownTheme(style));
+  }
+
+  /** Mirror mutations to a store (session persistence) without owning it. */
+  // trace:exempt reason=internal-detail
+  setObserver(observer: (event: { type: "append" | "patch"; card: Card }) => void): void {
+    this.observer = observer;
+  }
+
+  /**
+   * Replace every card, used when resuming a stored session. Deliberately
+   * does not notify the observer: replaying history must not re-record it.
+   */
+  // trace:exempt reason=internal-detail
+  setCards(cards: readonly Card[]): void {
+    this.cards.length = 0;
+    this.cards.push(...cards.map((card) => ({ ...card })));
+    this.counter = cards.length;
+    this.invalidate();
   }
 
   // trace:exempt reason=internal-detail
@@ -190,7 +220,9 @@ export class Transcript implements Component {
   append(card: Omit<Card, "id"> & { id?: string }): string {
     this.counter += 1;
     const id = card.id ?? `card-${this.counter}`;
-    this.cards.push({ ...card, id });
+    const stored: Card = { ...card, id };
+    this.cards.push(stored);
+    this.observer?.({ type: "append", card: stored });
     this.invalidate();
     return id;
   }
@@ -203,17 +235,21 @@ export class Transcript implements Component {
     // trace:exempt reason=internal-detail
     if (index === -1) {
       this.counter += 1;
-      this.cards.push({
+      const stored: Card = {
         id,
         kind: "notice",
         title: "",
         body: [],
         ...patch,
-      });
+      };
+      this.cards.push(stored);
+      this.observer?.({ type: "append", card: stored });
       this.invalidate();
       return;
     }
-    this.cards[index] = { ...(this.cards[index] as Card), ...patch };
+    const merged: Card = { ...(this.cards[index] as Card), ...patch };
+    this.cards[index] = merged;
+    this.observer?.({ type: "patch", card: merged });
     this.invalidate();
   }
 
@@ -236,11 +272,32 @@ export class Transcript implements Component {
       this.markdown.setText(text);
       return this.markdown.render(w);
     };
+    // Rendered line ranges per card, so a click can be mapped back to the
+    // card under the cursor.
+    this.ranges.length = 0;
     // trace:exempt reason=internal-detail
     for (const card of this.cards) {
       if (card.kind === "thinking" && !this.showThinking) continue;
+      const start = lines.length;
       lines.push(...renderCard(card, width, this.style, this.expanded, assistant));
+      this.ranges.push({ card, start, end: lines.length - 1 });
     }
     return lines;
+  }
+
+  /**
+   * Click a card to collapse or expand it. Mouse is an affordance, never a
+   * requirement: every action here is reachable from the keyboard.
+   */
+  // trace:v1 id=impl.tui-transcript-mouse work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (event.type !== "press" && event.type !== "click") return undefined;
+    if (event.button !== "left") return undefined;
+    // trace:exempt reason=internal-detail
+    const range = this.ranges.find((entry) => event.y >= entry.start && event.y <= entry.end);
+    if (!range) return undefined;
+    if (range.card.body.length === 0) return { handled: true };
+    range.card.collapsed = range.card.collapsed !== true;
+    return { handled: true, render: true };
   }
 }

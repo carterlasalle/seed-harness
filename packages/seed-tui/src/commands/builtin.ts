@@ -23,6 +23,7 @@ export const DIALOGS: readonly string[] = [
   "tools",
   "registry",
   "evolution",
+  "sessions",
 ] as const;
 
 // trace:exempt reason=internal-detail
@@ -48,6 +49,9 @@ export const CORE_COMMANDS: readonly CommandSpec[] = [
   { name: "evolve", description: "Evolution control center", dialog: "evolution" },
   { name: "evolution", description: "Alias for /evolve", dialog: "evolution" },
   { name: "theme", description: "Change appearance", argumentHint: "[name]" },
+  { name: "sessions", description: "Browse and resume saved sessions", dialog: "sessions" },
+  { name: "new", description: "Start a fresh session (keeps the current one)" },
+  { name: "image", description: "Show an image file inline when supported", argumentHint: "<path>" },
   { name: "reload", description: "Rediscover capabilities, skills, and models" },
   { name: "quit", description: "Leave the interactive session" },
 ];
@@ -88,6 +92,8 @@ export function registerCoreCommands(
     onReload?: (ctx: CommandContext) => void | Promise<void>;
     onQuit?: (ctx: CommandContext) => void;
     onTheme?: (args: string, ctx: CommandContext) => void;
+    onNew?: (ctx: CommandContext) => void;
+    onImage?: (args: string, ctx: CommandContext) => void;
   } = {},
 ): void {
   // trace:exempt reason=internal-detail
@@ -101,7 +107,7 @@ export function registerCoreCommands(
       handler: async (args: string, ctx: CommandContext): Promise<void> => {
         // trace:exempt reason=internal-detail
         if (spec.dialog) {
-          ctx.open(spec.dialog, args);
+          await ctx.open(spec.dialog, args);
           return;
         }
         // trace:exempt reason=internal-detail
@@ -113,6 +119,16 @@ export function registerCoreCommands(
         if (spec.name === "theme") {
           if (hooks.onTheme) hooks.onTheme(args, ctx);
           else ctx.print(`themes: ${registry.list("theme").map((t) => t.name).join(", ")}`);
+          return;
+        }
+        // trace:exempt reason=internal-detail
+        if (spec.name === "new") {
+          hooks.onNew?.(ctx);
+          return;
+        }
+        // trace:exempt reason=internal-detail
+        if (spec.name === "image") {
+          hooks.onImage?.(args, ctx);
           return;
         }
         // trace:exempt reason=internal-detail

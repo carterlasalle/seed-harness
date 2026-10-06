@@ -76,8 +76,12 @@ export interface CommandContext {
   args: string;
   /** Close the interactive app (no-op in headless mode). */
   quit: () => void;
-  /** Open a named dialog, if the presentation layer supports it. */
-  open: (dialog: string, args?: string) => void;
+  /**
+   * Open a named dialog, if the presentation layer supports it. May be async:
+   * a dialog that loads data must be awaited so the session's idle signal
+   * covers it.
+   */
+  open: (dialog: string, args?: string) => void | Promise<void>;
   /** Print a line into the transcript. */
   print: (text: string) => void;
 }

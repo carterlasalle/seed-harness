@@ -10,6 +10,7 @@
 // EvolveStatus, queueExperiment, evolveStatus, evolveRun.
 
 import { listEvalResults, loadQueue, recentRuns, saveQueue } from "./state.ts";
+import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
 import { compareEvals } from "./eval.ts";
 import { runTask } from "./run.ts";
 export interface EvolveStatus {
@@ -66,4 +67,75 @@ export function tryPromotionCheck(root?: string): { ready: boolean; detail: stri
   // trace:exempt reason=internal-detail
   const verdict = compareEvals(results[results.length - 2]!, results[results.length - 1]!);
   return { ready: verdict.nonInferior, detail: verdict.detail };
+}
+
+/** One candidate as the guardian reports it (metadata only). */
+// trace:exempt reason=internal-detail
+export interface CandidateSummary {
+  id: string;
+  ref: string;
+  parent: string;
+  status: string;
+}
+
+/** One Pareto archive member the guardian retained. */
+// trace:exempt reason=internal-detail
+export interface ArchiveMemberSummary {
+  ref: string;
+  novelty: number;
+  tags: string[];
+}
+
+// trace:exempt reason=internal-detail
+function socketPath(): string {
+  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+}
+
+/**
+ * Candidates recorded by the guardian.
+ *
+ * Read-only and metadata-only: this is display provenance, never a promotion
+ * input, and an unreachable guardian yields an empty list so a dialog can
+ * still open offline.
+ */
+// trace:v1 id=impl.cli-evolve-candidates work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export async function listCandidates(): Promise<CandidateSummary[]> {
+  try {
+    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
+    const result = (await client.call("candidate.list", {})) as { candidates?: unknown };
+    client.close();
+    if (!Array.isArray(result?.candidates)) return [];
+    return result.candidates.map((raw) => {
+      const row = (raw ?? {}) as Record<string, unknown>;
+      return {
+        id: typeof row.id === "string" ? row.id : "",
+        ref: typeof row.ref === "string" ? row.ref : "",
+        parent: typeof row.parent === "string" ? row.parent : "",
+        status: typeof row.status === "string" ? row.status : "unknown",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Pareto archive members the guardian retained; empty when unreachable. */
+// trace:v1 id=impl.cli-evolve-archive work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export async function listArchive(): Promise<ArchiveMemberSummary[]> {
+  try {
+    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
+    const result = (await client.call("archive.list", {})) as { members?: unknown };
+    client.close();
+    if (!Array.isArray(result?.members)) return [];
+    return result.members.map((raw) => {
+      const row = (raw ?? {}) as Record<string, unknown>;
+      return {
+        ref: typeof row.ref === "string" ? row.ref : "",
+        novelty: typeof row.novelty === "number" ? row.novelty : 0,
+        tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [],
+      };
+    });
+  } catch {
+    return [];
+  }
 }

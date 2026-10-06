@@ -11,6 +11,7 @@
 // telemetry via the organism.
 // Public functions/types: RunOptions, runTask.
 
+import { randomUUID } from "node:crypto";
 import { appendJsonl, loadChampion, recentRuns, recordRun, stateDir } from "./state.ts";
 import type { RunRecord } from "./state.ts";
 import { discoverCapabilities } from "./capabilities.ts";
@@ -53,7 +54,10 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
     .filter((entry) => (wanted ? wanted.has(entry.id) : true))
     .map((entry) => entry.id);
   // trace:exempt reason=internal-detail
-  const id = `run-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffff).toString(16)}`;
+  // Run ids are written into state files, so they come from the CSPRNG rather
+  // than Math.random: predictable identifiers in a persisted record are a
+  // weakness, and a UUID also cannot collide.
+  const id = `run-${randomUUID()}`;
   // trace:exempt reason=internal-detail
   const at = new Date().toISOString();
   // trace:exempt reason=internal-detail

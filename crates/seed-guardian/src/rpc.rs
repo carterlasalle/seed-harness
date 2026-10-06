@@ -40,6 +40,11 @@ pub const AGENT_METHODS: &[&str] = &[
     "champion.show",
     "champion.history",
     "champion.rollback",
+    // Read-only provenance for the interactive frontend: which candidates
+    // exist and what reached the archive. Metadata only — hidden oracle
+    // outputs stay guardian-side.
+    "candidate.list",
+    "archive.list",
 ];
 
 /// Guardian-only methods: rejected with method-not-found, never routed.
@@ -148,6 +153,8 @@ pub fn handle_line(db: &Db, line: &str) -> Option<String> {
         "champion.show" => champion_show(db, &req.id),
         "champion.history" => champion_history(db, &req.id),
         "champion.rollback" => champion_rollback(db, &req.id),
+        "candidate.list" => candidate_list(db, &req.id),
+        "archive.list" => archive_list(db, &req.id),
         _ => fail(&req.id, -32601, "method not found"),
     };
     Some(out)
@@ -355,6 +362,58 @@ fn champion_history(db: &Db, id: &Option<Value>) -> String {
 fn champion_rollback(db: &Db, id: &Option<Value>) -> String {
     match crate::champion::rollback(db) {
         Ok(previous) => respond(id, serde_json::json!({"ref": previous})),
+        Err(e) => fail(id, -32603, &e),
+    }
+}
+
+/// Read-only candidate list: which challengers exist and what state they hold.
+///
+/// Metadata only. Hidden oracle outputs stay guardian-side, so the organism
+/// can show provenance without gaining a path to influence evaluation.
+// trace:v1 id=impl.rpc-candidate-list work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+fn candidate_list(db: &Db, id: &Option<Value>) -> String {
+    match db.list_candidates() {
+        Ok(rows) => respond(
+            id,
+            serde_json::json!({
+                "candidates": rows
+                    .iter()
+                    .map(|row| {
+                        serde_json::json!({
+                            "id": row.id,
+                            "ref": row.ref_str,
+                            "parent": row.parent_ref,
+                            "status": row.status,
+                            "metrics": serde_json::from_str::<Value>(&row.metrics_json).unwrap_or(Value::Null),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            }),
+        ),
+        Err(e) => fail(id, -32603, &e),
+    }
+}
+
+/// Read-only Pareto archive list: the members the guardian retained.
+// trace:v1 id=impl.rpc-archive-list work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
+fn archive_list(db: &Db, id: &Option<Value>) -> String {
+    match crate::archive::list(db) {
+        Ok(entries) => respond(
+            id,
+            serde_json::json!({
+                "members": entries
+                    .iter()
+                    .map(|entry| {
+                        serde_json::json!({
+                            "ref": entry.candidate_ref,
+                            "novelty": entry.novelty,
+                            "tags": entry.tags,
+                            "metrics": entry.metrics,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            }),
+        ),
         Err(e) => fail(id, -32603, &e),
     }
 }
