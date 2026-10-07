@@ -35,6 +35,7 @@ for arg in "$@"; do
 done
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
+warn() { printf '\033[33mnote:\033[0m %s\n' "$*" >&2; }
 bad() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; }
 
 # Each tool is checked with the reason it is needed, so a missing one is
@@ -133,7 +134,7 @@ if [ "$verify" -eq 1 ]; then
       bad "core checks failed:$fatal — fix them and run \`seed doctor\`"
       exit 1
     fi
-    bad "installed, but some checks need attention (see FAIL lines above)"
+    warn "installed, but some checks need attention (see FAIL lines above)"
     printf "    Docker is needed only for \`seed eval run\`; the guardian daemon for guardian-backed commands.\n"
   fi
 fi
