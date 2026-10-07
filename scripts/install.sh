@@ -110,7 +110,10 @@ if [ "$verify" -eq 1 ]; then
   say "==> Verifying"
   # The guardian is not started here: doctor reports it as a check so a
   # stopped daemon is visible rather than fatal.
-  doctor_out="$("$bin_dir/seed" doctor 2>&1)" && doctor_ok=1 || doctor_ok=0
+  # Run from the checkout: doctor validates the repository's schemas and
+  # capability manifests, so the caller's directory would misreport those as
+  # failures.
+  doctor_out="$(cd "$repo" && "$bin_dir/seed" doctor 2>&1)" && doctor_ok=1 || doctor_ok=0
   printf '%s\n' "$doctor_out"
   if [ "$doctor_ok" -eq 1 ]; then
     printf '\n'
