@@ -12,6 +12,7 @@
 // Public functions: runInteractiveTask.
 
 import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
+import { guardianSocketPath } from "../guardian.ts";
 import { runOrganismTask } from "@carterlasalle/seed-runtime/dist/organism.js";
 import type { AgentLoopTurn } from "@carterlasalle/seed-runtime/dist/organism.js";
 import type { TurnEvent } from "@carterlasalle/seed-tui/src/app.ts";
@@ -59,7 +60,7 @@ export async function runInteractiveTask(
   emit: (event: TurnEvent) => void,
   options: InteractiveTaskOptions = {},
 ): Promise<{ ok: boolean; summary: string }> {
-  const socketPath = `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
+  const socketPath = guardianSocketPath();
   const client = await connectGuardian({ socketPath, connectTimeoutMs: 5000 });
   const sessionId =
     options.sessionId ?? `tui-${Date.now().toString(36)}-${process.pid.toString(36)}`;

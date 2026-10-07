@@ -73,10 +73,14 @@ seed update                 # git pull --ff-only, then reinstall
 seed update --check         # report installed vs latest, change nothing
 ```
 
-`seed update` runs the same installer, so a source checkout and a registry
-install share one upgrade path. The CLI also prints a reminder when a newer
-release exists — cached, so it never delays the command you actually ran. Set
-`SEED_NO_UPDATE_CHECK=1` to silence it.
+`seed update` upgrades a **source install** in place. It resolves the checkout
+from the installed CLI rather than your working directory, so it works from any
+project. A registry install has no checkout to pull, so `seed update` says so
+and names the registry command instead.
+
+`seed update --check` and the reminder work for every install mode: they read
+the latest GitHub release from a cache, so neither delays the command you
+actually ran. Set `SEED_NO_UPDATE_CHECK=1` to silence the reminder.
 
 ### From the registries
 
@@ -99,7 +103,8 @@ Regenerate the brew formula after each PyPI release with
 
 ### Prerequisites
 
-- Node.js `>= 22` (have v22.22.2)
+- Node.js `>= 22.18` (have v22.22.2) — Seed runs TypeScript directly, which
+  Node strips without a flag only from 22.18
 - Corepack with Yarn `4.9.2`
 - Python `>= 3.10` via `uv`
 - Rust via Cargo

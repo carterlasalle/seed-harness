@@ -22,7 +22,7 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "dependencies": {
     "@carterlasalle/seed-core": "0.2.0",

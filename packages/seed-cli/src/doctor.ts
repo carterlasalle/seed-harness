@@ -48,8 +48,19 @@ export async function runDoctor(root?: string): Promise<DoctorReport> {
   const repo = seedRoot(root);
   const checks: DoctorCheck[] = [];
   const node = probeVersion("node", "node", ["--version"]);
-  node.ok = node.ok && /^v(2[2-9]|[3-9][0-9])\./.test(node.detail);
-  if (node.ok && !/^v(2[2-9]|[3-9][0-9])\./.test(node.detail)) node.detail += " (need >=22)";
+  // Seed executes TypeScript directly, which Node only does without a flag
+  // from 22.18. The gate has to match what scripts/install.sh enforces, or
+  // doctor passes a machine on which the installed `seed` cannot start.
+  // trace:exempt reason=internal-detail
+  const nodeVersion = /^v(\d+)\.(\d+)\./.exec(node.detail);
+  // trace:exempt reason=internal-detail
+  const nodeSupported =
+    nodeVersion !== null &&
+    (Number(nodeVersion[1]) > 22 || (Number(nodeVersion[1]) === 22 && Number(nodeVersion[2]) >= 18));
+  if (node.ok && !nodeSupported) {
+    node.ok = false;
+    node.detail += " (need >= 22.18: Seed runs TypeScript directly)";
+  }
   checks.push(node);
   checks.push(probeVersion("yarn", "yarn", ["--version"]));
   checks.push(probeVersion("uv", "uv", ["--version"]));

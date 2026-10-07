@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkCachedUpdate } from "./update-check.ts";
+import { cachedUpdateStatus, checkCachedUpdate } from "./update-check.ts";
 
 /** Point the checker at a private cache seeded with `latest`, and return cleanup. */
 function withCache(latest: string): () => void {
@@ -71,6 +71,26 @@ test("notifying writes a throttle stamp so the next run is quiet", () => {
     assert.equal(checkCachedUpdate("0.2.0"), undefined, "and is throttled for 24h");
     const cache = JSON.parse(readFileSync(file, "utf8")) as { lastNotifiedVersion?: string };
     assert.equal(cache.lastNotifiedVersion, "v9.9.9", "the stamp records what was announced");
+  } finally {
+    delete process.env.SEED_UPDATE_CACHE;
+  }
+});
+
+test("status reports the same answer twice, unlike the throttled reminder", () => {
+  const dir = mkdtempSync(join(tmpdir(), "seed-update-"));
+  const file = join(dir, "update.json");
+  writeFileSync(file, JSON.stringify({ latest: "v9.9.9", checkedAt: Date.now() }));
+  process.env.SEED_UPDATE_CACHE = file;
+  delete process.env.SEED_NO_UPDATE_CHECK;
+  try {
+    // The entry-point preflight always runs the reminder first, which stamps
+    // the 24h throttle. `seed update --check` must not inherit that: it would
+    // report "up to date" immediately after printing that an update exists.
+    assert.ok(checkCachedUpdate("0.2.0"), "the reminder fires once");
+    assert.equal(checkCachedUpdate("0.2.0"), undefined, "and is throttled");
+    assert.deepEqual(cachedUpdateStatus("0.2.0"), { latest: "9.9.9" }, "status still reports it");
+    assert.deepEqual(cachedUpdateStatus("0.2.0"), { latest: "9.9.9" }, "asking again is stable");
+    assert.equal(cachedUpdateStatus("9.9.9"), undefined, "an up-to-date install reports nothing");
   } finally {
     delete process.env.SEED_UPDATE_CACHE;
   }

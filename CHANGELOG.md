@@ -10,18 +10,29 @@ Install, update, and terminal integration.
   check, dependencies, a `.env`, and `seed` + `seed-guardian` on `PATH`. It
   is idempotent, so it doubles as the repair path. Only the toolchain and
   the static gates can fail it — a stopped Docker daemon or guardian is
-  reported, never fatal.
-- `seed update` upgrades in place (`git pull --ff-only`, then reinstall);
-  `seed update --check` reports without changing anything.
+  reported, never fatal. It requires Node >= 22.18, matching the shim: Seed
+  runs TypeScript directly, which Node strips without a flag only from
+  22.18, so earlier Node 22 releases would install a `seed` that cannot
+  start.
+- `seed update` upgrades a source install in place (`git pull --ff-only`,
+  then reinstall); `seed update --check` reports without changing anything.
+  The update resolves the checkout from the installed CLI, never the working
+  directory — `seed` runs from other projects, and updating whichever
+  repository happened to be current would be wrong and unsafe. A registry
+  install has no checkout, so it is told to use its package manager.
 - The update reminder could never fire: `checkCachedUpdate` declared a
   return type, ended on a helper and fell off the end, so it always
-  returned `undefined`. It now reports `installed -> latest` and names
-  `seed update`.
+  returned `undefined`. It now reports `installed -> latest`. `seed update
+  --check` reads the cache through a separate query that neither throttles
+  nor stamps a notification, so the entry-point reminder can no longer make
+  an explicit check report "up to date".
 - `.env` is actually read now. It was documented, and error messages told
   people to put values in it, but nothing loaded the file — only `doctor`
   regex-scraped one key for its own check. A model key placed exactly where
   the message said to put it silently did nothing and presented as a
-  missing key. Real environment variables still win.
+  missing key. It resolves from the checkout when there is one and from
+  `~/.seed/.env` otherwise, so a registry install reads a real path instead
+  of walking up out of `node_modules`. Real environment variables still win.
 - `.env.example` was missing its trailing newline, so appending a key with
   `>>` merged it into the last comment and the key vanished.
 - The interactive session opens with a short boot animation; any key skips

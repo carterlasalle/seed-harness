@@ -136,3 +136,22 @@ export function checkCachedUpdate(installed: string): string | undefined {
   // so the reminder could never print however stale the install was.
   return `${clean(installed)} -> ${clean(cache.latest)}`;
 }
+
+/**
+ * The latest known release versus `installed`, for an explicit status query.
+ *
+ * Deliberately not the reminder: `checkCachedUpdate` throttles repeats for 24h
+ * and stamps `lastNotifiedAt`, so the entry-point preflight would make an
+ * immediately following `seed update --check` report "up to date" right after
+ * printing that an update exists. This only reads the cache — no background
+ * refresh, no write, no throttle — so asking twice gives the same answer.
+ */
+// trace:v1 id=impl.cli-update-status work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function cachedUpdateStatus(installed: string): { latest: string } | undefined {
+  // trace:exempt reason=internal-detail
+  const cache = readCache();
+  if (!cache) return undefined;
+  if (cmpSemver(cache.latest, installed) <= 0) return undefined;
+  // trace:exempt reason=internal-detail
+  return { latest: cache.latest.replace(/^[v=\s]+/, "") };
+}

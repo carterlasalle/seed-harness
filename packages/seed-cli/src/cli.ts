@@ -330,20 +330,28 @@ export async function main(argv: string[]): Promise<number> {
         // trace:exempt reason=internal-detail
         const { installedVersion } = await import("./version.ts");
         if (sub === "--check" || sub === "check") {
-          const { checkCachedUpdate } = await import("./update-check.ts");
+          const { cachedUpdateStatus } = await import("./update-check.ts");
           const version = installedVersion();
-          const notice = version ? checkCachedUpdate(version) : undefined;
+          const status = version ? cachedUpdateStatus(version) : undefined;
           emit({
             installed: version,
-            latest: notice ? notice.split(" -> ")[1] : null,
-            updateAvailable: notice !== undefined,
+            latest: status?.latest ?? null,
+            updateAvailable: status !== undefined,
           });
           return 0;
         }
+        // The checkout this CLI was installed from, never the caller's working
+        // directory: `seed` runs from other projects, and updating whatever
+        // repository happens to be current would be both wrong and unsafe.
         // trace:exempt reason=internal-detail
-        const { seedRoot } = await import("./state.ts");
+        const { installRoot } = await import("./install.ts");
+        const root = installRoot();
+        if (root === null) {
+          emit("failed this is a registry install — upgrade with brew, npm, or cargo; there is no checkout to update");
+          return 1;
+        }
         const { updateCheckout } = await import("./update.ts");
-        const result = updateCheckout(seedRoot(), { pull: sub !== "--no-pull", quiet: json });
+        const result = updateCheckout(root, { pull: sub !== "--no-pull", quiet: json });
         emit(result.ok ? `ok ${result.detail}` : `failed ${result.detail}`);
         return result.ok ? 0 : 1;
       }
@@ -461,7 +469,14 @@ if (invoked) {
   // install. Real environment variables still win (see dotenv.ts).
   try {
     const { loadEnvFile } = await import("./dotenv.ts");
-    loadEnvFile(join(import.meta.dirname, "..", "..", "..", ".env"));
+    const { installRoot, userConfigDir } = await import("./install.ts");
+    // The checkout's `.env` when running from one, then the per-user file that
+    // also works for registry installs — where the package sits in
+    // node_modules and a relative path would walk up into unrelated trees.
+    // loadEnvFile never overwrites, so an earlier file wins over a later one.
+    const root = installRoot();
+    if (root !== null) loadEnvFile(join(root, ".env"));
+    loadEnvFile(join(userConfigDir(), ".env"));
   } catch {
     // An unreadable .env must never break the CLI.
   }

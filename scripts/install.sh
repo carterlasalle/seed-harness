@@ -59,9 +59,14 @@ if [ "$missing" -ne 0 ]; then
   exit 1
 fi
 
-node_major="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$node_major" -lt 22 ]; then
-  bad "node $node_major is too old — Seed needs >= 22 (npm and strip-types)"
+node_version="$(node -v | sed 's/^v//')"
+node_major="${node_version%%.*}"
+node_minor="$(printf '%s' "$node_version" | cut -d. -f2)"
+# The shim runs the TypeScript entry point directly. Node strips types without
+# a flag only from 22.18, so 22.0-22.17 would install a `seed` that cannot
+# start.
+if [ "$node_major" -lt 22 ] || { [ "$node_major" -eq 22 ] && [ "$node_minor" -lt 18 ]; }; then
+  bad "node $node_version is too old — Seed runs TypeScript directly, which needs >= 22.18"
   exit 1
 fi
 printf '    node %s, %s, %s\n' "$(node -v)" "$(uv --version)" "$(cargo --version | cut -d' ' -f1,2)"
