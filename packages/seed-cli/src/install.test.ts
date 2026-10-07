@@ -19,7 +19,7 @@ test("the checkout this CLI runs from is detected by layout", () => {
   const root = installRoot();
   assert.notEqual(root, null, "tests run from the checkout, so it resolves");
   assert.ok(existsSync(join(root as string, "scripts", "install.sh")), "has the installer");
-  assert.ok(existsSync(join(root as string, "crates", "seed-guardian")), "has the guardian crate");
+  assert.ok(existsSync(join(root as string, "schemas", "capability.schema.json")), "has the repo schemas");
 });
 
 test("the result never depends on the working directory", () => {

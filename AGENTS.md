@@ -2785,6 +2785,18 @@ allowlist and the capability JSONL ABI. `node scripts/verify-boundaries.ts`
 fails CI on `seed-guardian` imports or guardian-only RPC in the organism.
 See `docs/adr/0001-guardian-organism-split.md` and `docs/SECURITY.md`.
 
+Details worth knowing before editing under `packages/`:
+
+- The guardian check is a literal `/seed-guardian|seed_guardian/` match over
+  every file in `packages/seed-{core,runtime,lab,cli}/src`. A comment or a
+  path string trips it exactly like an import does. Need a "is this a Seed
+  checkout" marker? Use repo-level artifacts — `scripts/install.sh`,
+  `schemas/capability.schema.json` — not the crate directory.
+- It does **not** scan `packages/seed-tui/src`, so a user-facing hint there
+  may name the binary (see `errors.ts`).
+- Run the gate *after* creating files, not just before: a new file under
+  `seed-cli/src` is exactly what it catches.
+
 ---
 
 ## Source-of-truth files

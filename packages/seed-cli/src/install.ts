@@ -32,8 +32,12 @@ export function installRoot(): string | null {
   const packageRoot = dirname(import.meta.dirname);
   // trace:exempt reason=internal-detail
   const candidate = join(packageRoot, "..", "..");
+  // Two repo-level markers that a published package does not ship (its files
+  // are dist/, LICENSE and README). Deliberately not the guardian crate: the
+  // boundary gate forbids that string anywhere under packages/*/src, and it is
+  // right to — naming it here would be indistinguishable from an import.
   if (!existsSync(join(candidate, "scripts", "install.sh"))) return null;
-  if (!existsSync(join(candidate, "crates", "seed-guardian"))) return null;
+  if (!existsSync(join(candidate, "schemas", "capability.schema.json"))) return null;
   return candidate;
 }
 
