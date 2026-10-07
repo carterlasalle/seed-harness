@@ -10,7 +10,7 @@
 // EvolveStatus, queueExperiment, evolveStatus, evolveRun.
 
 import { listEvalResults, loadQueue, recentRuns, saveQueue } from "./state.ts";
-import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
+import { guardianSocketPath as socketPath, withGuardian } from "./guardian.ts";
 import { compareEvals } from "./eval.ts";
 import { runTask } from "./run.ts";
 export interface EvolveStatus {
@@ -86,11 +86,6 @@ export interface ArchiveMemberSummary {
   tags: string[];
 }
 
-// trace:exempt reason=internal-detail
-function socketPath(): string {
-  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
-}
-
 /**
  * Candidates recorded by the guardian.
  *
@@ -101,9 +96,9 @@ function socketPath(): string {
 // trace:v1 id=impl.cli-evolve-candidates work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function listCandidates(): Promise<CandidateSummary[]> {
   try {
-    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
-    const result = (await client.call("candidate.list", {})) as { candidates?: unknown };
-    client.close();
+    const result = await withGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 }, (client) =>
+      client.call("candidate.list", {}) as Promise<{ candidates?: unknown }>,
+    );
     if (!Array.isArray(result?.candidates)) return [];
     return result.candidates.map((raw) => {
       const row = (raw ?? {}) as Record<string, unknown>;
@@ -123,9 +118,9 @@ export async function listCandidates(): Promise<CandidateSummary[]> {
 // trace:v1 id=impl.cli-evolve-archive work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function listArchive(): Promise<ArchiveMemberSummary[]> {
   try {
-    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
-    const result = (await client.call("archive.list", {})) as { members?: unknown };
-    client.close();
+    const result = await withGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 }, (client) =>
+      client.call("archive.list", {}) as Promise<{ members?: unknown }>,
+    );
     if (!Array.isArray(result?.members)) return [];
     return result.members.map((raw) => {
       const row = (raw ?? {}) as Record<string, unknown>;

@@ -18,6 +18,8 @@ import { discoverCapabilities } from "./capabilities.ts";
 import { selectTools } from "@carterlasalle/seed-core/dist/router.js";
 import { runOrganismTask } from "@carterlasalle/seed-runtime/dist/organism.js";
 import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
+import type { GuardianClient } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
+import { guardianSocketPath } from "./guardian.ts";
 import { detectFriction } from "@carterlasalle/seed-core/dist/friction.js";
 import type { FrictionObservation } from "@carterlasalle/seed-core/dist/friction.js";
 import { runEvolutionCycle } from "@carterlasalle/seed-lab/dist/evolution.js";
@@ -67,13 +69,18 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
     session,
     payload: { runId: id, prompt: trimmed.slice(0, 200), champion: champion.ref },
   });
+  // Held outside the try so every path — success, handled failure, or throw —
+  // closes it. An open guardian socket keeps the event loop alive; the CLI
+  // hides that with process.exit, but any other caller (the test runner, a
+  // library consumer) simply never returns.
+  let client: GuardianClient | undefined;
   try {
     // Real agent loop: guardian is mandatory (no noguardian fallback),
     // champion comes from hello (single truth), the model drives python
     // turns, friction runs over the real trajectory.
     // trace:exempt reason=internal-detail
-    const socketPath = `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
-    const client = await connectGuardian({ socketPath, connectTimeoutMs: 5000 });
+    const socketPath = guardianSocketPath();
+    client = await connectGuardian({ socketPath, connectTimeoutMs: 5000 });
     const organism = await runOrganismTask({
       client,
       workspace: process.cwd(),
@@ -134,5 +141,8 @@ export async function runTask(prompt: string, options: RunOptions = {}): Promise
     // trace:exempt reason=internal-detail
     recordRun(record, root);
     return record;
+  } finally {
+    // A run is one-shot: the connection must not outlive it.
+    client?.close();
   }
 }

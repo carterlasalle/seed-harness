@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import { indexEvalResult, listEvalResults, saveEvalResult, seedRoot } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
 import { runOrganismTask } from "@carterlasalle/seed-runtime/dist/organism.js";
-import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
+import { guardianSocketPath as defaultSocketPath, withGuardian } from "./guardian.ts";
 
 export interface EvalRunOptions {
   limit?: number;
@@ -28,11 +28,6 @@ export interface EvalRunOptions {
   holdout?: boolean;
   replay?: boolean;
   crossModel?: string[];
-}
-
-// trace:exempt reason=internal-detail
-function defaultSocketPath(): string {
-  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
 }
 
 // trace:v1 id=impl.cli-eval-repair work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
@@ -88,14 +83,17 @@ export async function runEvalCase(dir: string, options: { model?: string; maxTur
   const work = mkdtempSync(join(tmpdir(), "seed-eval-"));
   try {
     cpSync(dir, work, { recursive: true });
+    // The client is scoped to the agent run: `loop` is the only thing needed
+    // afterwards, and the connection must not outlive the work it drives.
     // trace:exempt reason=internal-detail
-    const client = await connectGuardian({ socketPath: defaultSocketPath(), connectTimeoutMs: 5000 });
-    // trace:exempt reason=internal-detail
-    const organism = await runOrganismTask({ client, workspace: work, taskBrief: manifest.prompt ?? dir, sessionId: `eval-${Date.now().toString(36)}` });
-    // trace:exempt reason=internal-detail
-    const loop = await organism.runAgentLoop({ model: options.model, maxTurns: options.maxTurns ?? 12 });
-    await organism.end(loop.done && loop.turns.length > 0 ? "done" : "failed", loop.summary.slice(0, 500));
-    client.close();
+    const loop = await withGuardian({ socketPath: defaultSocketPath(), connectTimeoutMs: 5000 }, async (client) => {
+      // trace:exempt reason=internal-detail
+      const organism = await runOrganismTask({ client, workspace: work, taskBrief: manifest.prompt ?? dir, sessionId: `eval-${Date.now().toString(36)}` });
+      // trace:exempt reason=internal-detail
+      const run = await organism.runAgentLoop({ model: options.model, maxTurns: options.maxTurns ?? 12 });
+      await organism.end(run.done && run.turns.length > 0 ? "done" : "failed", run.summary.slice(0, 500));
+      return run;
+    });
     // trace:exempt reason=internal-detail
     const child = spawnSync("sh", [join(work, oracle)], { encoding: "utf8", timeout: timeoutMs, cwd: work });
     if (child.error || child.status !== 0) {

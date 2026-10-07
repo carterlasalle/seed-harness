@@ -13,20 +13,17 @@
 
 import { loadChampion, saveChampion } from "./state.ts";
 import type { ChampionPointer } from "./state.ts";
-import { connectGuardian } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
-
-// trace:exempt reason=internal-detail
-function socketPath(): string {
-  return `${process.env.HOME ?? ""}/.seed/run/guardian.sock`;
-}
+// The socket path is resolved in one place so SEED_GUARDIAN_SOCKET can point
+// tests at a socket that does not exist, exercising the offline fallbacks.
+import { guardianSocketPath as socketPath, withGuardian } from "./guardian.ts";
 
 // trace:v1 id=impl.cli-champion-show work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function showChampion(root?: string): Promise<ChampionPointer> {
   const local = loadChampion(root);
   try {
-    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
-    const result = (await client.call("champion.show", {})) as { ref?: unknown };
-    client.close();
+    const result = await withGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 }, (client) =>
+      client.call("champion.show", {}) as Promise<{ ref?: unknown }>,
+    );
     if (typeof result?.ref === "string" && result.ref.length > 0 && result.ref !== local.ref) {
       local.ref = result.ref;
       local.updatedAt = new Date().toISOString();
@@ -42,9 +39,9 @@ export async function showChampion(root?: string): Promise<ChampionPointer> {
 export async function championHistory(root?: string): Promise<ChampionPointer["history"]> {
   const local = loadChampion(root);
   try {
-    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
-    const result = (await client.call("champion.history", {})) as { history?: Array<{ ref?: unknown; reason?: unknown; at?: unknown }> };
-    client.close();
+    const result = await withGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 }, (client) =>
+      client.call("champion.history", {}) as Promise<{ history?: Array<{ ref?: unknown; reason?: unknown; at?: unknown }> }>,
+    );
     if (Array.isArray(result?.history) && result.history.length > 0) {
       return result.history.map((h) => ({
         ref: typeof h.ref === "string" ? h.ref : "",
@@ -62,9 +59,9 @@ export async function championHistory(root?: string): Promise<ChampionPointer["h
 export async function rollbackChampion(ref: string, reason: string, root?: string): Promise<ChampionPointer> {
   if (!ref) throw new Error("rollback needs a ref");
   try {
-    const client = await connectGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 });
-    const result = (await client.call("champion.rollback", {})) as { ref?: unknown };
-    client.close();
+    const result = await withGuardian({ socketPath: socketPath(), connectTimeoutMs: 1500 }, (client) =>
+      client.call("champion.rollback", {}) as Promise<{ ref?: unknown }>,
+    );
     if (typeof result?.ref !== "string" || result.ref.length === 0) throw new Error("guardian rollback returned no ref");
     const pointer = loadChampion(root);
     const at = new Date().toISOString();
