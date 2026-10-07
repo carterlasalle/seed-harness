@@ -29,10 +29,12 @@ import {
   matchesKey,
   renderImage,
 } from "@earendil-works/pi-tui";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import type { Component, OverlayHandle, SlashCommand, Terminal } from "@earendil-works/pi-tui";
 import { HeaderBar, StatusBar } from "./components/chrome.ts";
+import { BOOT_FRAME_MS, BootScreen } from "./components/boot.ts";
 import { Transcript } from "./components/transcript.ts";
 import type { Card } from "./components/transcript.ts";
 import { registerCoreCommands, registerCoreKeybindings } from "./commands/builtin.ts";
@@ -101,6 +103,11 @@ export interface SeedTuiHost {
    */
   terminal?: Terminal;
   /**
+   * Play the startup animation. Off by default: it is driven by wall-clock
+   * frames, so headless and test hosts must opt out to stay deterministic.
+   */
+  animate?: boolean;
+  /**
    * Called once the app is live. Gives callers deterministic control over
    * frames and completion, so tests never wait on wall-clock time.
    */
@@ -149,6 +156,41 @@ export function slashCommands(registry: SeedRegistry): SlashCommand[] {
   }));
 }
 
+/**
+ * The URL to hand the platform opener for a clicked link, or null when it must
+ * not be opened. Only http(s) qualifies: prompt drift and tool output can carry
+ * any scheme, and `open` on macOS will happily hand `file://` and app-scheme
+ * URLs to whatever claims them. Exported so the rule is testable without
+ * launching anything.
+ */
+// trace:v1 id=impl.tui-link-target work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function linkTarget(url: string): string | null {
+  // trace:exempt reason=internal-detail
+  let scheme: string;
+  try {
+    scheme = new URL(url).protocol;
+  } catch {
+    return null;
+  }
+  return scheme === "http:" || scheme === "https:" ? url : null;
+}
+
+/** Open a clicked link through the platform opener. Fire-and-forget: a link that fails must not disturb the session. */
+// trace:v1 id=impl.tui-open-url work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+function openExternal(url: string): void {
+  // trace:exempt reason=internal-detail
+  const target = linkTarget(url);
+  if (target === null) return;
+  // trace:exempt reason=internal-detail
+  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  // trace:exempt reason=internal-detail
+  const args = process.platform === "win32" ? ["/c", "start", "", target] : [target];
+  // trace:exempt reason=internal-detail
+  const child = spawn(command, args, { detached: true, stdio: "ignore" });
+  child.on("error", () => undefined);
+  child.unref();
+}
+
 // trace:v1 id=impl.tui-launch work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export async function launchTui(host: SeedTuiHost): Promise<number> {
   const { registry } = host;
@@ -157,8 +199,18 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
   const terminal = host.terminal ?? new ProcessTerminal();
   // Mouse reporting only exists on the alternate screen, so it is opt-in:
   // the default keeps the terminal's own scrollback, which matters more than
-  // clicking for most sessions.
-  const tui = host.mouse === true ? new TuiAltScreen(terminal, undefined, undefined, { mouse: true }) : new TuiMainScreen(terminal);
+  // clicking for most sessions. Transcript search is part of the same bundle —
+  // it lives in the alternate screen — so this branch decides both.
+  const tui =
+    host.mouse === true
+      ? new TuiAltScreen(terminal, undefined, undefined, {
+          mouse: true,
+          // Links already render as OSC 8; without this a click does nothing.
+          openUrl: openExternal,
+          // Shown while a follow-end view is scrolled away from its end.
+          scrollToEndIndicator: () => style("dim", "↓ end"),
+        })
+      : new TuiMainScreen(terminal);
   const header = new HeaderBar(style);
   const status = new StatusBar(style);
   const transcript = new Transcript(style);
@@ -589,9 +641,52 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     new CombinedAutocompleteProvider(slashCommands(registry), host.cwd, null),
   );
 
+  // The startup animation, when the host asked for it. It owns the screen for
+  // about a second, then hands off to the session layout. Frames are driven by
+  // the host (not the component) so tests get the same code path without a clock.
+  // trace:exempt reason=internal-detail
+  let boot: BootScreen | null = host.animate === true ? new BootScreen(style) : null;
+  // trace:exempt reason=internal-detail
+  let bootTimer: ReturnType<typeof setInterval> | null = null;
+  // trace:exempt reason=internal-detail
+  const mountSession = (): void => {
+    // trace:exempt reason=internal-detail
+    if (isViewportTUI(tui)) {
+      // The alternate screen renders one layout root rather than a child list.
+      tui.setLayoutRoot(new VStack([header, scroll, editor, status]));
+    } else {
+      tui.addChild(header);
+      tui.addChild(scroll);
+      tui.addChild(editor);
+      tui.addChild(status);
+    }
+    tui.setFocus(editor);
+  };
+  // trace:exempt reason=internal-detail
+  const endBoot = (): void => {
+    if (bootTimer !== null) {
+      clearInterval(bootTimer);
+      bootTimer = null;
+    }
+    if (boot === null) return;
+    const finished = boot;
+    boot = null;
+    // The alternate screen swaps its single root; the main screen must drop
+    // the boot child explicitly.
+    if (!isViewportTUI(tui)) tui.removeChild(finished);
+    mountSession();
+    tui.requestRender(true);
+  };
+
   // Ctrl+P and the reasoning controls read their keys from the registry, so
   // editing a keybinding entry changes which keys respond.
   removeListener = tui.addInputListener((data: string) => {
+    // Any key during the boot ends it rather than being swallowed: nobody
+    // should have to wait out an animation to type.
+    if (boot !== null) {
+      endBoot();
+      return undefined;
+    }
     // trace:exempt reason=internal-detail
     if (bindingMatches(data, "seed.palette")) {
       openOverlay(
@@ -626,16 +721,12 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
   status.update({ revision: registry.revision, queueDepth: 0 });
 
   // trace:exempt reason=internal-detail
-  if (isViewportTUI(tui)) {
-    // The alternate screen renders one layout root rather than a child list.
-    tui.setLayoutRoot(new VStack([header, scroll, editor, status]));
+  if (boot !== null) {
+    if (isViewportTUI(tui)) tui.setLayoutRoot(boot);
+    else tui.addChild(boot);
   } else {
-    tui.addChild(header);
-    tui.addChild(scroll);
-    tui.addChild(editor);
-    tui.addChild(status);
+    mountSession();
   }
-  tui.setFocus(editor);
 
   transcript.append({
     kind: "notice",
@@ -645,6 +736,16 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
 
   process.once("SIGINT", shutdown);
   tui.start();
+  if (boot !== null) {
+    bootTimer = setInterval(() => {
+      if (boot === null) return;
+      if (!boot.advance()) endBoot();
+      else tui.requestRender(true);
+    }, BOOT_FRAME_MS);
+    // An animation must never be the reason the process stays alive; the
+    // session itself decides when to exit.
+    (bootTimer as { unref?: () => void }).unref?.();
+  }
   host.onReady?.({ renderNow: () => tui.renderNow(true), whenIdle: () => pending });
   return exited;
 }

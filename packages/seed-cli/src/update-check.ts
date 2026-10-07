@@ -132,4 +132,7 @@ export function checkCachedUpdate(installed: string): string | undefined {
   writeCache({ ...cache, lastNotifiedVersion: cache.latest, lastNotifiedAt: now });
   // trace:exempt reason=internal-detail
   const clean = (v: string): string => v.replace(/^[v=\s]+/, "");
+  // Without this the function fell off the end and always returned undefined,
+  // so the reminder could never print however stale the install was.
+  return `${clean(installed)} -> ${clean(cache.latest)}`;
 }

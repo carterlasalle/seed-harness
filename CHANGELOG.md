@@ -2,6 +2,46 @@
 <!-- trace:v1 id=impl.doc-changelog work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85 -->
 # Changelog
 
+## Unreleased
+
+Install, update, and terminal integration.
+
+- `scripts/install.sh` installs from a checkout in one command: toolchain
+  check, dependencies, a `.env`, and `seed` + `seed-guardian` on `PATH`. It
+  is idempotent, so it doubles as the repair path. Only the toolchain and
+  the static gates can fail it — a stopped Docker daemon or guardian is
+  reported, never fatal.
+- `seed update` upgrades in place (`git pull --ff-only`, then reinstall);
+  `seed update --check` reports without changing anything.
+- The update reminder could never fire: `checkCachedUpdate` declared a
+  return type, ended on a helper and fell off the end, so it always
+  returned `undefined`. It now reports `installed -> latest` and names
+  `seed update`.
+- `.env` is actually read now. It was documented, and error messages told
+  people to put values in it, but nothing loaded the file — only `doctor`
+  regex-scraped one key for its own check. A model key placed exactly where
+  the message said to put it silently did nothing and presented as a
+  missing key. Real environment variables still win.
+- `.env.example` was missing its trailing newline, so appending a key with
+  `>>` merged it into the last comment and the key vanished.
+- The interactive session opens with a short boot animation; any key skips
+  it, `SEED_NO_ANIM=1` disables it.
+- Alternate-screen sessions open clicked http(s) links and show a
+  jump-to-end label. Transcript search, text selection and copy were
+  already supplied by pi-tui's alternate screen; they are now documented
+  rather than merely present.
+- Fixed a guardian connection leak that made `yarn test` unusable whenever a
+  guardian was running. Every caller closed its client on the happy path
+  only (`client.close()` after the call), so a throw leaked an open socket,
+  and an open socket keeps the event loop alive. The CLI hid it behind
+  `process.exit`; the test runner simply never returned. Connections now go
+  through one helper that closes on every path. The suite went from never
+  finishing to 204 tests in ~3s.
+- The guardian socket path is resolved in one place and overridable with
+  `SEED_GUARDIAN_SOCKET`. Guardian-backed tests point it at a socket nothing
+  listens on, so they exercise the offline fallbacks instead of answering
+  from whichever daemon the developer happens to be running.
+
 ## 0.2.0 — 2026-10-06
 
 Interactive frontend. `seed` on a real terminal is now a product rather

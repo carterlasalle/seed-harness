@@ -2813,6 +2813,26 @@ contract) vs full eval (60 oracles).
 See `DESIGN.md`. CLI stdio only, no browser bundle; doctor output is
 `ok|FAIL name: detail` lines with nonzero exit on failure.
 
+`packages/seed-tui` is the only Pi-importing package (CI enforces). Grepping
+*seed-tui* for a TUI capability is misleading: search, text selection, link
+clicking, wheel scrolling and the jump-to-end label all live in pi-tui's
+`TuiAltScreen` and are switched on by the options Seed passes. Before
+concluding a terminal feature is missing, check the pi-tui side
+(`node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.d.ts` shows the
+options; `keybindings.d.ts` shows the default keys).
+
+Mode split matters: `SEED_TUI_MOUSE=1` selects `TuiAltScreen` (search on
+`Ctrl+Shift+F`, clickable OSC 8 links, `↓ end`, selection+copy); the default
+`TuiMainScreen` keeps the terminal's own scrollback and has none of them.
+Scroll-to-end is `Ctrl+End`, scroll-to-top `Ctrl+Home` — not `End`/`Home`.
+
+Terminal capability detection is pi-tui's and is already correct for tmux
+(truecolor via forwarded `COLORTERM`, image protocols deliberately off,
+hyperlinks probed with `tmux display-message -p '#{client_termfeatures}'`),
+Ghostty (kitty images + hyperlinks), screen (hyperlinks off) and unknown
+terminals (conservative). tmux and Ghostty need no Seed-side work; Tern's
+Surface Protocol is not implemented anywhere in Seed or pi-tui.
+
 ---
 
 ## Test topology
