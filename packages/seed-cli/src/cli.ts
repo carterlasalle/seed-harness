@@ -43,6 +43,7 @@ export const COMMANDS = [
   "champion history",
   "champion rollback <ref> [--reason TEXT]",
   "research refresh",
+  "update [--check]",
   "schema validate",
   "help",
 ] as const;
@@ -71,6 +72,7 @@ commands:
   champion history                show champion history
   champion rollback <ref>         rollback champion to ref
   research refresh                revalidate research catalogs
+  update [--check]                upgrade the checkout in place (pull + reinstall)
   schema validate                 validate schemas + manifests (static gate)
   help                            this text
 `;
@@ -322,6 +324,37 @@ export async function main(argv: string[]): Promise<number> {
         console.error("usage: seed research refresh [--live]");
         return 1;
       }
+      case "update": {
+        // `--check` reports without changing anything, so the reminder can be
+        // acted on deliberately rather than by surprise.
+        // trace:exempt reason=internal-detail
+        const { installedVersion } = await import("./version.ts");
+        if (sub === "--check" || sub === "check") {
+          const { cachedUpdateStatus } = await import("./update-check.ts");
+          const version = installedVersion();
+          const status = version ? cachedUpdateStatus(version) : undefined;
+          emit({
+            installed: version,
+            latest: status?.latest ?? null,
+            updateAvailable: status !== undefined,
+          });
+          return 0;
+        }
+        // The checkout this CLI was installed from, never the caller's working
+        // directory: `seed` runs from other projects, and updating whatever
+        // repository happens to be current would be both wrong and unsafe.
+        // trace:exempt reason=internal-detail
+        const { installRoot } = await import("./install.ts");
+        const root = installRoot();
+        if (root === null) {
+          emit("failed this is a registry install — upgrade with brew, npm, or cargo; there is no checkout to update");
+          return 1;
+        }
+        const { updateCheckout } = await import("./update.ts");
+        const result = updateCheckout(root, { pull: sub !== "--no-pull", quiet: json });
+        emit(result.ok ? `ok ${result.detail}` : `failed ${result.detail}`);
+        return result.ok ? 0 : 1;
+      }
       case "help":
       case "--help":
       case "-h": {
@@ -367,6 +400,9 @@ export async function main(argv: string[]): Promise<number> {
             sessionDir: join(stateDir(), "sessions"),
             // Mouse is opt-in because it costs the terminal's scrollback.
             mouse: process.env.SEED_TUI_MOUSE === "1",
+            // This branch only runs on a real TTY, so the animation is safe
+            // here; SEED_NO_ANIM=1 opts out (and any key skips it live).
+            animate: process.env.SEED_NO_ANIM !== "1",
             runTask: async (prompt, emit) => {
               // Routing is recomputed per task so /tools can explain why a
               // capability is or is not visible for the work in flight.
@@ -428,6 +464,22 @@ export async function main(argv: string[]): Promise<number> {
 // trace:exempt reason=internal-detail
 const invoked = process.argv[1] !== undefined && !process.argv[1].endsWith(".test.ts");
 if (invoked) {
+  // `.env` is resolved against the install root, not the working directory:
+  // `seed` is meant to run from any project, and the file belongs to the
+  // install. Real environment variables still win (see dotenv.ts).
+  try {
+    const { loadEnvFile } = await import("./dotenv.ts");
+    const { installRoot, userConfigDir } = await import("./install.ts");
+    // The checkout's `.env` when running from one, then the per-user file that
+    // also works for registry installs — where the package sits in
+    // node_modules and a relative path would walk up into unrelated trees.
+    // loadEnvFile never overwrites, so an earlier file wins over a later one.
+    const root = installRoot();
+    if (root !== null) loadEnvFile(join(root, ".env"));
+    loadEnvFile(join(userConfigDir(), ".env"));
+  } catch {
+    // An unreadable .env must never break the CLI.
+  }
   // Stale-while-revalidate: synchronous cache read first so the notice
   // always lands before process.exit; background refresh stays detached.
   // Never blocks on network, never throws, honors SEED_NO_UPDATE_CHECK=1.
@@ -438,7 +490,7 @@ if (invoked) {
     // skips the reminder rather than inventing a number to compare with.
     const version = installedVersion();
     const notice = version ? checkCachedUpdate(version) : undefined;
-    if (notice) console.error(`seed: update available — ${notice}`);
+    if (notice) console.error(`seed: update available — ${notice} (run \`seed update\`)`);
   } catch {
     // A broken cache must never break the CLI.
   }

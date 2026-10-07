@@ -2785,6 +2785,18 @@ allowlist and the capability JSONL ABI. `node scripts/verify-boundaries.ts`
 fails CI on `seed-guardian` imports or guardian-only RPC in the organism.
 See `docs/adr/0001-guardian-organism-split.md` and `docs/SECURITY.md`.
 
+Details worth knowing before editing under `packages/`:
+
+- The guardian check is a literal `/seed-guardian|seed_guardian/` match over
+  every file in `packages/seed-{core,runtime,lab,cli}/src`. A comment or a
+  path string trips it exactly like an import does. Need a "is this a Seed
+  checkout" marker? Use repo-level artifacts — `scripts/install.sh`,
+  `schemas/capability.schema.json` — not the crate directory.
+- It does **not** scan `packages/seed-tui/src`, so a user-facing hint there
+  may name the binary (see `errors.ts`).
+- Run the gate *after* creating files, not just before: a new file under
+  `seed-cli/src` is exactly what it catches.
+
 ---
 
 ## Source-of-truth files
@@ -2812,6 +2824,26 @@ contract) vs full eval (60 oracles).
 
 See `DESIGN.md`. CLI stdio only, no browser bundle; doctor output is
 `ok|FAIL name: detail` lines with nonzero exit on failure.
+
+`packages/seed-tui` is the only Pi-importing package (CI enforces). Grepping
+*seed-tui* for a TUI capability is misleading: search, text selection, link
+clicking, wheel scrolling and the jump-to-end label all live in pi-tui's
+`TuiAltScreen` and are switched on by the options Seed passes. Before
+concluding a terminal feature is missing, check the pi-tui side
+(`node_modules/@earendil-works/pi-tui/dist/tui-alt-screen.d.ts` shows the
+options; `keybindings.d.ts` shows the default keys).
+
+Mode split matters: `SEED_TUI_MOUSE=1` selects `TuiAltScreen` (search on
+`Ctrl+Shift+F`, clickable OSC 8 links, `↓ end`, selection+copy); the default
+`TuiMainScreen` keeps the terminal's own scrollback and has none of them.
+Scroll-to-end is `Ctrl+End`, scroll-to-top `Ctrl+Home` — not `End`/`Home`.
+
+Terminal capability detection is pi-tui's and is already correct for tmux
+(truecolor via forwarded `COLORTERM`, image protocols deliberately off,
+hyperlinks probed with `tmux display-message -p '#{client_termfeatures}'`),
+Ghostty (kitty images + hyperlinks), screen (hyperlinks off) and unknown
+terminals (conservative). tmux and Ghostty need no Seed-side work; Tern's
+Surface Protocol is not implemented anywhere in Seed or pi-tui.
 
 ---
 

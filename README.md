@@ -58,11 +58,29 @@ Two paths: from source (to hack on Seed) or from the registries (to use Seed).
 ```sh
 git clone https://github.com/carterlasalle/seed-harness.git
 cd seed-harness
-corepack enable
-yarn install --immutable
-uv sync --locked --project python/seed_evolution
-cargo build --workspace
+scripts/install.sh          # toolchain check, deps, .env, `seed` on PATH
 ```
+
+The script is idempotent, so it doubles as the repair path. It puts `seed`
+and `seed-guardian` in `SEED_BIN_DIR` (default `~/.local/bin`) and says so if
+that directory is not on your `PATH`. Only the toolchain and the static gates
+can fail it: a stopped Docker daemon or guardian is reported, not fatal.
+
+### Updating
+
+```sh
+seed update                 # git pull --ff-only, then reinstall
+seed update --check         # report installed vs latest, change nothing
+```
+
+`seed update` upgrades a **source install** in place. It resolves the checkout
+from the installed CLI rather than your working directory, so it works from any
+project. A registry install has no checkout to pull, so `seed update` says so
+and names the registry command instead.
+
+`seed update --check` and the reminder work for every install mode: they read
+the latest GitHub release from a cache, so neither delays the command you
+actually ran. Set `SEED_NO_UPDATE_CHECK=1` to silence the reminder.
 
 ### From the registries
 
@@ -85,7 +103,8 @@ Regenerate the brew formula after each PyPI release with
 
 ### Prerequisites
 
-- Node.js `>= 22` (have v22.22.2)
+- Node.js `>= 22.18` (have v22.22.2) — Seed runs TypeScript directly, which
+  Node strips without a flag only from 22.18
 - Corepack with Yarn `4.9.2`
 - Python `>= 3.10` via `uv`
 - Rust via Cargo
@@ -110,6 +129,8 @@ arguments launches the interactive product; anything else stays headless.
 seed            # TTY: header, transcript, composer, status bar
 ```
 
+- The session opens with a short boot animation; any key skips it, and
+  `SEED_NO_ANIM=1` turns it off for scripted use.
 - `/` opens a searchable slash menu; `Ctrl+P` opens the command palette.
   Both are views of the same registry, so an extension that registers a
   command makes it appear in each without a restart.
@@ -134,7 +155,19 @@ seed            # TTY: header, transcript, composer, status bar
 - Skills and capabilities are watched on disk: drop one in and it appears
   without a reload.
 - Mouse is opt-in (`SEED_TUI_MOUSE=1`): it switches to the alternate screen, so
-  the default keeps your terminal's own scrollback.
+  the default keeps your terminal's own scrollback. The alternate screen is
+  also the only mode where the transcript is walkable — the affordances come
+  from `TuiAltScreen`, not from Seed:
+  - `Ctrl+Shift+F` searches the transcript; `Enter` and `Shift+Enter` step
+    through matches, `Esc` closes.
+  - Clicking an OSC 8 link opens it (`open`/`xdg-open`), restricted to
+    http(s).
+  - A `↓ end` label appears while you are scrolled away from the live tail;
+    click it or press `Ctrl+End`.
+  - Drag selects text; a selection copies on release (OSC 52, or the native
+    clipboard when available).
+  None of this exists on the main screen, which is the trade for keeping your
+  terminal's own scrollback.
 
 ### Headless
 

@@ -23,7 +23,7 @@ import { SeedRegistry } from "./registry/registry.ts";
 import { registerCoreCommands } from "./commands/builtin.ts";
 import { registerThemes } from "./theme/theme.ts";
 import { createSessionStore } from "./session-store.ts";
-import { launchTui } from "./app.ts";
+import { launchTui, linkTarget } from "./app.ts";
 import type { SeedTuiHandle } from "./app.ts";
 
 /** A terminal that records everything written and lets the test send keys. */
@@ -501,4 +501,18 @@ test("editing a keybinding entry changes which key responds", async () => {
   handle.renderNow();
   await submit(terminal, handle, "/quit");
   await app;
+});
+
+test("a clicked link opens only http(s), never a local or app scheme", () => {
+  // Links reach the transcript from model output and tool results, so the
+  // scheme is untrusted input on the way to the platform opener.
+  assert.equal(linkTarget("https://example.com/docs"), "https://example.com/docs");
+  assert.equal(linkTarget("http://example.com:8080/x"), "http://example.com:8080/x");
+  assert.equal(linkTarget("file:///etc/passwd"), null);
+  assert.equal(linkTarget("javascript:alert(1)"), null);
+  assert.equal(linkTarget("data:text/html,<script>1</script>"), null);
+  assert.equal(linkTarget("vscode://file/etc/hosts"), null);
+  assert.equal(linkTarget("ssh://host"), null);
+  assert.equal(linkTarget("not a url"), null);
+  assert.equal(linkTarget(""), null);
 });

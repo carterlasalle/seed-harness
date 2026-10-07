@@ -22,7 +22,7 @@ import { evolveRun, evolveStatus, queueExperiment } from "./evolve.ts";
 import { compareEvals, smokeEval } from "./eval.ts";
 import { rollbackChampion, showChampion } from "./champion.ts";
 import { runDoctor } from "./doctor.ts";
-import { loadQueue, recentRuns } from "./state.ts";
+import { loadQueue } from "./state.ts";
 import type { EvalResultSummary } from "./state.ts";
 
 // trace:exempt reason=unit-test
@@ -30,6 +30,10 @@ function isolate(): string {
   const dir = mkdtempSync(join(tmpdir(), "seed-cli-test-"));
   process.env.SEED_STATE_DIR = join(dir, "state");
   process.env.SEED_ROOT = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
+  // A socket path inside the temp dir that nothing is listening on: the
+  // guardian-backed paths must fall back to local state, not answer from
+  // whichever daemon the developer happens to be running.
+  process.env.SEED_GUARDIAN_SOCKET = join(dir, "guardian.sock");
   return dir;
 }
 
