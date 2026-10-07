@@ -30,6 +30,10 @@ target/
 .yarn/install-state.gz
 evals/core/generated/*
 !evals/core/generated/.gitkeep
+# Local environment: `.env` holds the model key once you set it, so it must
+# never be committed. `.env.example` stays tracked as the template.
+.env
+
 # Seed runtime state (spec section 11): CLI state (~/.seed) and session
 # scratch must never be committed, even when env overrides point inside repo.
 .seed-state/

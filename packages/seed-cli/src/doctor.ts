@@ -85,12 +85,15 @@ export async function runDoctor(root?: string): Promise<DoctorReport> {
     });
   }
   try {
+    // No root argument: runtime state lives in ~/.seed (ADR-0002), so doctor
+    // must report the directory the rest of the CLI actually uses. Passing the
+    // repo root would read and resurrect a stale <repo>/.seed-state.
     // trace:exempt reason=internal-detail
-    const champion = loadChampion(repo);
+    const champion = loadChampion();
     checks.push({
       name: "champion",
       ok: typeof champion.ref === "string" && champion.ref.length > 0,
-      detail: `ref=${champion.ref} (${champion.history.length} history entries in ${stateDir(repo)})`,
+      detail: `ref=${champion.ref} (${champion.history.length} history entries in ${stateDir()})`,
     });
   } catch (error) {
     checks.push({
