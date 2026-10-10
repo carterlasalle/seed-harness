@@ -12,7 +12,16 @@ import { join } from "node:path";
 import { SeedRegistry } from "@carterlasalle/seed-tui/src/registry/registry.ts";
 import { buildRegistry, readConfigToml, refreshToolRouting } from "./sources.ts";
 
+// trace:exempt reason=unit-test
+function isolate(): void {
+  // Model profiles live under the state dir, so registry population must not
+  // touch the developer's real ~/.seed — or fail when HOME is unwritable.
+  // Same isolation contract as seed-cli's cli.test.ts.
+  process.env.SEED_STATE_DIR = mkdtempSync(join(tmpdir(), "seed-sources-test-"));
+}
+
 test("buildRegistry populates every domain it owns", () => {
+  isolate();
   const registry = buildRegistry();
   assert.ok(registry.size("command") > 0, "commands registered");
   assert.ok(registry.size("setting") > 0, "settings registered");
@@ -23,6 +32,7 @@ test("buildRegistry populates every domain it owns", () => {
 });
 
 test("guardian-scope settings are read-only, others are editable", () => {
+  isolate();
   const registry = buildRegistry();
   const guardian = registry.list("setting").filter((s) => s.scope === "guardian");
   assert.ok(guardian.length > 0, "the guardian policy group exists");
@@ -35,6 +45,7 @@ test("guardian-scope settings are read-only, others are editable", () => {
 });
 
 test("refreshToolRouting fills visibility, score and rank from the router", () => {
+  isolate();
   const registry = buildRegistry();
   assert.ok(registry.size("tool") > 0, "tools exist to route");
 
@@ -67,6 +78,7 @@ test("a tool whose capability the router did not select reports not-visible", ()
 });
 
 test("model-scope role settings exist and are persisted to config.toml", () => {
+  isolate();
   const registry = buildRegistry();
   const roles = registry.list("setting").filter((s) => s.scope === "model");
   assert.deepEqual(
@@ -92,6 +104,7 @@ test("readConfigToml parses a real file and tolerates a missing one", () => {
 });
 
 test("a model holding a role is marked with it", () => {
+  isolate();
   const registry = buildRegistry();
   const task = registry.get("setting", "models.task");
   assert.ok(task, "the task role exists");
