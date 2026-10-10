@@ -381,16 +381,33 @@ export async function main(argv: string[]): Promise<number> {
           // trace:exempt reason=internal-detail
           const settingNumber = (key: string, fallback: number): number => {
             const value = registry.get("setting", key)?.value;
-            return typeof value === "number" ? value : fallback;
+            if (typeof value === "number") return value;
+            // The dialog coerces on write, but a value seeded from config or
+            // an older session file may still be a numeric string.
+            if (typeof value === "string" && value.trim().length > 0) {
+              const parsed = Number(value);
+              if (Number.isFinite(parsed)) return parsed;
+            }
+            return fallback;
           };
           // trace:exempt reason=internal-detail
           const settingString = (key: string, fallback: string): string => {
             const value = registry.get("setting", key)?.value;
             return typeof value === "string" ? value : fallback;
           };
-          // trace:exempt reason=internal-detail
-          const currentModel = (): string =>
+          // SEED_MODEL seeds the launch default only: once the user picks a
+          // model in the session, that choice wins. Otherwise /model could
+          // never override the environment for a new task.
+          const launchDefaultModel =
             process.env.SEED_MODEL ?? settingString("session.model", "anthropic/claude-sonnet-4");
+          {
+            const setting = registry.get("setting", "session.model");
+            if (setting && process.env.SEED_MODEL && setting.value !== process.env.SEED_MODEL) {
+              registry.register("setting", { ...setting, value: launchDefaultModel });
+            }
+          }
+          // trace:exempt reason=internal-detail
+          const currentModel = (): string => settingString("session.model", launchDefaultModel);
           return launchTui({
             registry,
             cwd: process.cwd(),
@@ -403,14 +420,23 @@ export async function main(argv: string[]): Promise<number> {
             // This branch only runs on a real TTY, so the animation is safe
             // here; SEED_NO_ANIM=1 opts out (and any key skips it live).
             animate: process.env.SEED_NO_ANIM !== "1",
-            runTask: async (prompt, emit) => {
+            runTask: async (prompt, emit, sessionId) => {
               // Routing is recomputed per task so /tools can explain why a
               // capability is or is not visible for the work in flight.
               refreshToolRouting(registry, prompt);
+              // The same discovered skills the headless path passes as cards:
+              // enabled only, so a shadowed duplicate never reaches the model
+              // twice.
+              const skills = registry
+                .list("skill")
+                .filter((skill) => skill.enabled)
+                .map((skill) => ({ id: skill.name, description: skill.description }));
               return runInteractiveTask(prompt, emit, {
                 model: currentModel(),
                 thinking: settingString("session.thinking", "medium"),
                 maxTurns: settingNumber("session.maxTurns", 12),
+                resumeSessionId: sessionId,
+                skills,
               });
             },
             watchSources: watchSourcesFor(),

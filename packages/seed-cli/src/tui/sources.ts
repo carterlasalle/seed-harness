@@ -262,7 +262,12 @@ export function registerEngineCommands(registry: SeedRegistry): void {
   );
 }
 
-/** Built-in renderers so a tool card never falls back to raw JSON. */
+/**
+ * Built-in renderer claims: which card shapes the transcript covers, with a
+ * human summary per shape. These are coverage metadata (the registry census),
+ * not a dispatch table — actual rendering lives in `renderCard`, which
+ * handles every card kind directly so raw JSON never leaks.
+ */
 // trace:v1 id=impl.cli-tui-renderers work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
 export function registerRenderers(registry: SeedRegistry): void {
   const renderers = [
@@ -314,7 +319,6 @@ export function refreshToolRouting(registry: SeedRegistry, task: string, root?: 
     });
   }
 }
-
 /**
  * Filesystem-backed domains to keep live. Each source reuses the same
  * discovery function startup used, so there is one discovery path per domain
@@ -333,6 +337,14 @@ export function watchSourcesFor(root?: string): WatchSource[] {
       domain: "capability",
       dirs: [join(repo, "capabilities", "builtin"), join(repo, "capabilities", "fixtures")],
       discover: () => capabilityEntries(root),
+    },
+    // Model profiles live in the state dir (seed profile writes models.json);
+    // watching it keeps /model live without a restart or /reload.
+    // trace:v1 id=impl.cli-tui-watch-models work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+    {
+      domain: "model",
+      dirs: [stateDir(root)],
+      discover: () => modelEntries(root),
     },
   ];
 }
