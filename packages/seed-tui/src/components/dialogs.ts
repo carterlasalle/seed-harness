@@ -141,12 +141,41 @@ export function buildSettingsDialog(
       // Defence in depth: the browser already hides the editor for locked
       // entries, and the write path refuses them again here.
       if (!setting || setting.readOnly) return;
-      registry.register("setting", { ...setting, value: newValue });
+      // The list hands back strings; the registry holds typed values, so
+      // coerce here. Without this a numeric setting becomes "20" and every
+      // numeric reader falls back to its default.
+      // trace:v1 id=impl.tui-settings-coerce work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+      registry.register("setting", { ...setting, value: coerceSettingValue(setting, newValue) });
       onChange(id, newValue);
     },
     onCancel,
     { enableSearch: true },
   );
+}
+
+/**
+ * Coerce a dialog string to the setting's declared type. Unknown shapes keep
+ * the raw string — the reader-side fallback stays the safety net.
+ */
+// trace:v1 id=impl.tui-settings-coerce-fn work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+export function coerceSettingValue(
+  setting: { type: string; min?: number; max?: number },
+  raw: string,
+): unknown {
+  const text = raw.trim();
+  if (setting.type === "number") {
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) return raw;
+    if (typeof setting.min === "number" && parsed < setting.min) return setting.min;
+    if (typeof setting.max === "number" && parsed > setting.max) return setting.max;
+    return parsed;
+  }
+  if (setting.type === "boolean") {
+    if (text === "true") return true;
+    if (text === "false") return false;
+    return raw;
+  }
+  return raw;
 }
 
 // trace:v1 id=impl.tui-build-skills-dialog work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85

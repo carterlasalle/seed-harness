@@ -48,6 +48,22 @@ test("python tool sees SEED_SCRATCH/SEED_SESSION_ID/SEED_WORKSPACE", async () =>
   }
 });
 
+test("restricted python hides harness secrets from model code", async () => {
+  const ws = tempDir();
+  process.env.SEED_TEST_SECRET_PROBE = "super-secret-probe-value";
+  try {
+    const out = await runPython({
+      code: "import os; print('probe' in os.environ or 'SEED_TEST_SECRET_PROBE' in os.environ)",
+      workspace: ws,
+    });
+    assert.equal(out.stdout.trim().split("\n").at(-1), "False");
+    assert.ok(!out.stdout.includes("super-secret-probe-value"));
+  } finally {
+    delete process.env.SEED_TEST_SECRET_PROBE;
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
 test("python tool runs git status in a scratch repo", async () => {
   const ws = tempDir();
   try {

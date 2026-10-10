@@ -49,6 +49,12 @@ export interface EvolutionCycleInput {
   probation?: { completed: number; strikes: number };
   runScientist?: (prompt: string) => Promise<unknown>;
   phases?: Record<"inspect" | "implement" | "test" | "commit", () => { ok: boolean; detail: string }>;
+  /**
+   * Real challenge verification: baseline/mutation/repair outcomes measured
+   * against the candidate. Without it there is no evidence a mutant proves a
+   * real weakness, so the cycle skips admission instead of using canned passes.
+   */
+  verifyChallenge?: (mutant: string) => { baselinePass: boolean; mutationPass: boolean; repairPass: boolean };
 }
 
 export interface EvolutionCycleResult {
@@ -129,16 +135,19 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
   }
   // Stage 6: mutation — one variable against the champion worktree. The
   // change text comes from the top backlog item so risk mapping is real.
+  // Without caller-supplied phase executors there is nothing real to run:
+  // claiming inspect/test/commit success synthetically would let Seed appear
+  // to improve without producing or evaluating a modification, so the cycle
+  // records the refusal and stops before candidate submission.
   const top = backlog[0];
   const change = top ? `prompt fragment: address ${top.clusterId}` : "prompt fragment: routine polish";
+  if (!input.phases) {
+    stages.push("mutation:skipped:no-executor");
+    return { signals, clusters, backlog, scientistPrompt, mutation: null, candidateRef: null, challengesAdmitted: 0, stages };
+  }
   const report = runMutationAgent(
     { parent: "champion", change, rationale: top?.title ?? "no backlog", predictedEffect: "reduce repeat friction" },
-    input.phases ?? {
-      inspect: () => ({ ok: true, detail: "inspected organism loop" }),
-      implement: () => ({ ok: true, detail: `implemented: ${change}` }),
-      test: () => ({ ok: true, detail: "yarn test green" }),
-      commit: () => ({ ok: true, detail: "committed candidate ref" }),
-    },
+    input.phases,
   );
   void riskForChange(change);
   stages.push(`mutation:${report.risk}:${report.steps.filter((s: { ok: boolean }) => s.ok).length}/4`);
@@ -165,17 +174,18 @@ export async function runEvolutionCycle(input: EvolutionCycleInput): Promise<Evo
   // Stage 8: challenge generation over the operator set — generate real
   // mutants from the current loop source, admit only those that expose a
   // genuine discrimination (baseline passes, mutation fails, repair passes).
+  // Without caller-supplied verification there is no measured evidence, so
+  // admission is skipped rather than decided by canned passes.
   // trace:exempt reason=internal-detail
   const loopSource = "if (turns.length < maxTurns) { turns.push(t); }";
   // trace:exempt reason=internal-detail
-  const challengeReport = generateChallenges([loopSource], 7, (mutant: string) => ({
-    baselinePass: true,
-    mutationPass: mutant === loopSource,
-    repairPass: true,
-  }));
-  // trace:exempt reason=internal-detail
-  const admitted = challengeReport.reduce((sum: number, r: { admitted: number }) => sum + r.admitted, 0);
-  stages.push(`challenges:${admitted}`);
+  const admitted = input.verifyChallenge
+    ? generateChallenges([loopSource], 7, input.verifyChallenge).reduce(
+        (sum: number, r: { admitted: number }) => sum + r.admitted,
+        0,
+      )
+    : 0;
+  stages.push(input.verifyChallenge ? `challenges:${admitted}` : "challenges:skipped:no-verifier");
   // Stage 9: crystallization — repeated helper patterns in this trajectory
   // become capability proposals (durable only after candidate evaluation).
   // trace:exempt reason=internal-detail

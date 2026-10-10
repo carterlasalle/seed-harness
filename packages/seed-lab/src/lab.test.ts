@@ -28,7 +28,9 @@ import {
   PROBE_NAMES,
   scientistDue,
   stripConstants,
+  runEvolutionCycle,
 } from "./index.ts";
+import type { GuardianClient } from "@carterlasalle/seed-runtime/dist/guardian-client.js";
 import type { BehaviorTrace } from "./index.ts";
 
 function trace(taskId: string, pattern: string, over: Partial<BehaviorTrace> = {}): BehaviorTrace {
@@ -180,4 +182,20 @@ test("profiler: 12 probes, provisional vs validated, scaffolding policy", () => 
   assert.equal(policyForModel(provisional).scaffolding, "keep");
   assert.equal(policyForModel({ ...validated, costPerTask: 0.9 }).scaffolding, "drop");
   assert.equal(policyForModel({ ...validated, costPerTask: 0.1 }).scaffolding, "keep");
+});
+
+test("evolution without executors records a skip, never synthetic success", async () => {
+  const client = { call: async () => undefined } as unknown as GuardianClient;
+  const cycle = await runEvolutionCycle({
+    client,
+    taskId: "task-1",
+    observations: [{ turn: 1, kind: "tool", tool: "python", status: "ok" }],
+    tasksSinceCycle: 10,
+    clustersSinceCycle: 0,
+  });
+  assert.equal(cycle.mutation, null);
+  assert.equal(cycle.candidateRef, null);
+  assert.equal(cycle.challengesAdmitted, 0);
+  assert.ok(cycle.stages.includes("mutation:skipped:no-executor"), `stages: ${cycle.stages.join(" ")}`);
+  assert.ok(!cycle.stages.some((s) => /^mutation:(low|medium|high):4\/4$/.test(s)), `no synthetic 4/4: ${cycle.stages.join(" ")}`);
 });

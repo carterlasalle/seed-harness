@@ -18,6 +18,7 @@ export interface ModelMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   tool_call_id?: string;
+  tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
 }
 
 export interface PythonToolSpec {
@@ -25,9 +26,14 @@ export interface PythonToolSpec {
   timeout_ms?: number;
 }
 
+export interface PythonToolCall extends PythonToolSpec {
+  /** Provider-issued id; echoed back as tool_call_id on the result. */
+  id: string;
+}
+
 export interface ModelTurn {
   text: string;
-  toolCall: PythonToolSpec | null;
+  toolCall: PythonToolCall | null;
   inputTokens: number;
   outputTokens: number;
   model: string;
@@ -71,11 +77,15 @@ export function buildChatRequest(init: {
 }): Record<string, unknown> {
   const wireMessages = [
     { role: "system", content: init.system },
-    ...init.messages.map((m) =>
-      m.role === "tool"
-        ? { role: "tool", tool_call_id: m.tool_call_id ?? "", content: m.content }
-        : { role: m.role, content: m.content },
-    ),
+    ...init.messages.map((m) => {
+      if (m.role === "tool") {
+        return { role: "tool", tool_call_id: m.tool_call_id ?? "", content: m.content };
+      }
+      if (m.role === "assistant" && m.tool_calls?.length) {
+        return { role: m.role, content: m.content, tool_calls: m.tool_calls };
+      }
+      return { role: m.role, content: m.content };
+    }),
   ];
   return {
     model: init.model ?? DEFAULT_MODEL,
@@ -133,7 +143,7 @@ export async function completeModelTurn(init: {
     choices?: Array<{
       message?: {
         content?: string | Array<{ text?: string }>;
-        tool_calls?: Array<{ function?: { name?: string; arguments?: string } }>;
+        tool_calls?: Array<{ id?: string; type?: string; function?: { name?: string; arguments?: string } }>;
       };
     }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -147,16 +157,23 @@ export async function completeModelTurn(init: {
       : Array.isArray(rawContent)
         ? rawContent.map((p) => p.text ?? "").join("")
         : "";
-  const toolCall = message.tool_calls?.[0]?.function;
-  let parsed: PythonToolSpec | null = null;
+  const rawCall = message.tool_calls?.[0];
+  const toolCall = rawCall?.function;
+  let parsed: PythonToolCall | null = null;
   if (toolCall?.name === "python" && typeof toolCall.arguments === "string") {
     try {
       const args = JSON.parse(toolCall.arguments) as { code?: unknown; timeout_ms?: unknown };
       if (typeof args.code === "string" && args.code.length > 0) {
-        parsed = {
-          code: args.code,
-          timeout_ms: typeof args.timeout_ms === "number" ? args.timeout_ms : undefined,
-        };
+        const callId = typeof rawCall?.id === "string" ? rawCall.id : "";
+        // A provider that omits the call id cannot be answered: the tool
+        // result would have no matching id. Fail closed instead of inventing one.
+        if (callId.length > 0) {
+          parsed = {
+            id: callId,
+            code: args.code,
+            timeout_ms: typeof args.timeout_ms === "number" ? args.timeout_ms : undefined,
+          };
+        }
       }
     } catch {
       parsed = null;

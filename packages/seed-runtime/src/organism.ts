@@ -21,7 +21,7 @@ import { GuardianClient, type GuardianHello } from "./guardian-client.ts";
 import { createSession, type SeedSession } from "./session.ts";
 import { runPython } from "./python-tool.ts";
 import { createEphemeralStore, type EphemeralStore } from "./ephemeral.ts";
-import { completeModelTurn } from "./model-client.ts";
+import { completeModelTurn, type ModelMessage } from "./model-client.ts";
 import type { ModelProfile } from "@carterlasalle/seed-core/dist/model-policy.js";
 import { resolveModelPolicy } from "@carterlasalle/seed-core/dist/model-policy.js";
 import {
@@ -274,8 +274,8 @@ export async function runAgentLoop(
     skillLine,
     "When the task is complete, reply with DONE: <one-line summary> and no tool call.",
   ].join("\n");
-  // trace:exempt reason=internal-detail
-  const history: { role: "user" | "assistant" | "tool"; content: string; tool_call_id?: string }[] = [
+  // trace:v1 id=impl.rt-agent-loop-history work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+  const history: ModelMessage[] = [
     { role: "user", content: taskBrief },
   ];
   // trace:exempt reason=internal-detail
@@ -309,8 +309,19 @@ export async function runAgentLoop(
       summary = (match?.[1] ?? turn.text).slice(0, 2000);
       history.push({ role: "assistant", content: turn.text });
       turns.push({ index, modelText: turn.text, code: null, stdout: "", ok: true, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens });
+      // The final answer is a completed turn like any other: the TUI renders
+      // through onTurn, so skipping it here reduces the answer to a done notice.
+      options?.onTurn?.(turns[turns.length - 1] as AgentLoopTurn);
       break;
     }
+    // The assistant turn that requested the tool must echo the provider's
+    // tool_calls back with its real id; the tool result carries the same id.
+    // Anything else breaks the OpenAI contract on the next request.
+    const callArgs = JSON.stringify(
+      turn.toolCall.timeout_ms === undefined
+        ? { code: turn.toolCall.code }
+        : { code: turn.toolCall.code, timeout_ms: turn.toolCall.timeout_ms },
+    );
     // trace:exempt reason=internal-detail
     const out = await runTurn(client, session, task, organismSha, workspace, {
       prompt: `agent-turn-${index}: ${turn.text.slice(0, 120)}`,
@@ -318,8 +329,12 @@ export async function runAgentLoop(
       timeoutMs: turn.toolCall.timeout_ms,
       evidence: "organism",
     }, emit, ephemeral);
-    history.push({ role: "assistant", content: turn.text });
-    history.push({ role: "tool", content: out.stdout.slice(0, policy.maxToolResultChars), tool_call_id: `turn-${index}` });
+    history.push({
+      role: "assistant",
+      content: turn.text,
+      tool_calls: [{ id: turn.toolCall.id, type: "function", function: { name: "python", arguments: callArgs } }],
+    });
+    history.push({ role: "tool", content: out.stdout.slice(0, policy.maxToolResultChars), tool_call_id: turn.toolCall.id });
     turns.push({ index, modelText: turn.text, code: turn.toolCall.code, stdout: out.stdout, ok: out.ok, inputTokens: turn.inputTokens, outputTokens: turn.outputTokens });
     // trace:exempt reason=internal-detail
     options?.onTurn?.(turns[turns.length - 1] as AgentLoopTurn);

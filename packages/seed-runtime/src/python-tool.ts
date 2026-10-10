@@ -36,6 +36,14 @@ export interface PythonToolOptions {
   sessionId?: string;
   scratchDir?: string;
   onTelemetry?: TelemetrySink;
+  /**
+   * Execution trust level. `restricted` (default) passes only the SEED_*
+   * contract plus non-secret runtime lookups (PATH, HOME, XDG cache dirs,
+   * tmp); `workspace` additionally inherits the caller's environment for
+   * trusted local work. Model-driven turns always use `restricted` — harness
+   * credentials must never reach model-generated code implicitly.
+   */
+  trust?: "restricted" | "workspace";
 }
 
 export interface PythonToolResult {
@@ -152,17 +160,35 @@ export function runPython(options: PythonToolOptions): Promise<PythonToolResult>
   const scratchDir = options.scratchDir ?? process.env.SEED_SCRATCH ?? "";
 
   return new Promise<PythonToolResult>((runResolve) => {
+    // trace:v1 id=impl.rt-python-env work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-YM8XJREE
+    const trust = options.trust ?? "restricted";
     // --no-project --no-sync keeps an ambient repo checkout with a
     // half-landed pyproject from hijacking the interpreter.
-    const child = spawn("uv", ["run", "--no-project", "--no-sync", "python", "-"], {
-      cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: {
-        ...process.env,
+    // Restricted is the model-facing default: the SEED_* contract plus the
+    // non-secret runtime lookups an interpreter needs (PATH, HOME, XDG cache
+    // dirs, TMPDIR) copied only when present. Everything else — notably
+    // OPENROUTER_API_KEY and other harness secrets — stays out.
+    const PASSTHROUGH_ENV = ["PATH", "HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "TMPDIR", "TEMP", "TMP"];
+    const restrictedEnv = (): Record<string, string | undefined> => {
+      const env: Record<string, string | undefined> = {
         SEED_SCRATCH: scratchDir,
         SEED_SESSION_ID: sessionId,
         SEED_WORKSPACE: workspace,
-      },
+      };
+      for (const key of PASSTHROUGH_ENV) {
+        const value = process.env[key];
+        if (value !== undefined) env[key] = value;
+      }
+      return env;
+    };
+    const childEnv: Record<string, string | undefined> =
+      trust === "workspace"
+        ? { ...process.env, SEED_SCRATCH: scratchDir, SEED_SESSION_ID: sessionId, SEED_WORKSPACE: workspace }
+        : restrictedEnv();
+    const child = spawn("uv", ["run", "--no-project", "--no-sync", "python", "-"], {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: childEnv,
       detached: true,
     });
     // trace:exempt reason=internal-detail
