@@ -241,7 +241,7 @@ Seed intentionally makes dangerous paths inconvenient:
 
 - The running champion never hot-swaps; sessions pin the SHA, new sessions take the new champion.
 - Generated capabilities default to out-of-process (`process` runtime) with allowlisted env only.
-- Candidate code never sees hidden oracle outputs, the guardian DB, promotion code, or other worktrees.
+- Model-driven Python runs restricted by default: only `SEED_*` plus non-secret runtime lookups (`PATH`, `HOME`, XDG cache dirs, tmp). Harness credentials such as `OPENROUTER_API_KEY` never reach model-generated code; pass `trust: "workspace"` only for trusted local work.
 - Sandbox mounts are `/candidate` rw, `/workspace` rw, `/seed-fixture` ro; network off; CPU 4 / mem 8g / pids 512.
 - Promotion needs a Champion-terminal state, non-inferior metrics, and material gain; probation runs 10 tasks and rolls back on 2 strikes.
 - Self-reported candidate telemetry is diagnostic metadata, never promotion evidence.

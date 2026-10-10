@@ -84,8 +84,13 @@ export interface EvolutionData {
 export interface SeedTuiHost {
   registry: SeedRegistry;
   cwd: string;
-  /** Optional engine hook. Absent → the composer reports that no engine is attached. */
-  runTask?: (prompt: string, emit: (event: TurnEvent) => void) => Promise<{ ok: boolean; summary: string }>;
+  /**
+   * Optional engine hook. `sessionId` is the displayed session the prompt was
+   * submitted in (stable across prompts until /new or /sessions resume), or
+   * null when persistence is off — so the engine can keep one model-facing
+   * session per displayed session instead of starting over every prompt.
+   */
+  runTask?: (prompt: string, emit: (event: TurnEvent) => void, sessionId: string | null) => Promise<{ ok: boolean; summary: string }>;
   /** Called once the UI has stopped, before launchTui resolves. */
   onQuit?: () => void;
   /** Evolution data for the `/evolve` dialog; the host owns these facts. */
@@ -304,11 +309,13 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
   };
 
   // trace:exempt reason=internal-detail
+  let stopAutocompleteRefresh: () => void = () => undefined;
   const shutdown = (): void => {
     if (stopped) return;
     stopped = true;
     watcher?.stop();
     unsubscribe();
+    stopAutocompleteRefresh();
     removeListener();
     overlay?.hide();
     overlay = null;
@@ -606,7 +613,9 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     let toolCard: string | null = null;
     let toolStartedAt = 0;
     try {
-      // trace:exempt reason=internal-detail
+      // The user card above already ran through the persistence observer, so
+      // currentSession is set for stored sessions and null otherwise. Passing
+      // it lets the engine keep one model-facing session per displayed one.
       const result = await host.runTask(trimmed, (event) => {
         if (event.kind === "text") transcript.append({ kind: "assistant", title: event.text, body: [] });
         else if (event.kind === "thinking") transcript.append({ kind: "thinking", title: event.text, body: [] });
@@ -625,7 +634,7 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
           transcript.append({ kind: "error", title: "turn failed", body: [], error: classifyError(event.error) });
         }
         repaint();
-      });
+      }, currentSession);
       transcript.append({ kind: "notice", title: result.ok ? `done: ${result.summary}` : `failed: ${result.summary}`, body: [] });
     } catch (error) {
       transcript.append({ kind: "error", title: "turn failed", body: [], error: classifyError(error) });
@@ -637,10 +646,19 @@ export async function launchTui(host: SeedTuiHost): Promise<number> {
     editor.addToHistory(text);
     pending = pending.then(() => dispatch(text));
   };
-  editor.setAutocompleteProvider(
-    new CombinedAutocompleteProvider(slashCommands(registry), host.cwd, null),
-  );
-
+  // The provider snapshots the command list at construction, so rebuild it
+  // whenever the command domain changes. Otherwise a newly registered
+  // command appears in /help and the palette but not in slash completion.
+  // trace:v1 id=impl.tui-autocomplete-refresh work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-EZPD6B85
+  const refreshAutocomplete = (): void => {
+    editor.setAutocompleteProvider(
+      new CombinedAutocompleteProvider(slashCommands(registry), host.cwd, null),
+    );
+  };
+  refreshAutocomplete();
+  stopAutocompleteRefresh = registry.on((event) => {
+    if (event.domain === "command") refreshAutocomplete();
+  });
   // The startup animation, when the host asked for it. It owns the screen for
   // about a second, then hands off to the session layout. Frames are driven by
   // the host (not the component) so tests get the same code path without a clock.

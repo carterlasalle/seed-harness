@@ -16,7 +16,6 @@ import { guardianSocketPath } from "../guardian.ts";
 import { runOrganismTask } from "@carterlasalle/seed-runtime/dist/organism.js";
 import type { AgentLoopTurn } from "@carterlasalle/seed-runtime/dist/organism.js";
 import type { TurnEvent } from "@carterlasalle/seed-tui/src/app.ts";
-
 // trace:exempt reason=internal-detail
 export interface InteractiveTaskOptions {
   cwd?: string;
@@ -25,6 +24,14 @@ export interface InteractiveTaskOptions {
   sessionId?: string;
   /** Reasoning effort forwarded to the model call. */
   thinking?: string;
+  /**
+   * Resume token for the model-facing session. When set, the engine reuses
+   * the caller's session id so consecutive prompts share model context;
+   * when absent the engine mints a fresh one-off id as before.
+   */
+  resumeSessionId?: string | null;
+  /** Discovered skill cards surfaced to the model as metadata. */
+  skills?: { id: string; description: string }[];
 }
 
 /** First line of a code block, trimmed — the tool card's one-line summary. */
@@ -62,8 +69,10 @@ export async function runInteractiveTask(
 ): Promise<{ ok: boolean; summary: string }> {
   const socketPath = guardianSocketPath();
   const client = await connectGuardian({ socketPath, connectTimeoutMs: 5000 });
+  // Prefer the displayed session id so prompts in one TUI session share one
+  // model-facing session; fall back to the explicit option, then one-off.
   const sessionId =
-    options.sessionId ?? `tui-${Date.now().toString(36)}-${process.pid.toString(36)}`;
+    options.resumeSessionId ?? options.sessionId ?? `tui-${Date.now().toString(36)}-${process.pid.toString(36)}`;
   try {
     const organism = await runOrganismTask({
       client,
@@ -75,6 +84,7 @@ export async function runInteractiveTask(
     const loop = await organism.runAgentLoop({
       ...(options.model ? { model: options.model } : {}),
       ...(options.thinking ? { thinking: options.thinking } : {}),
+      ...(options.skills ? { skills: options.skills } : {}),
       maxTurns: options.maxTurns ?? 12,
       onTurn: (turn) => {
         const now = Date.now();

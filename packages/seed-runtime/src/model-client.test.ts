@@ -48,3 +48,22 @@ test("a tool message keeps its tool_call_id", () => {
   const messages = body.messages as Array<Record<string, unknown>>;
   assert.equal(messages[2]?.tool_call_id, "call-1");
 });
+
+test("an assistant tool call round-trips with its provider id", () => {
+  const body = buildChatRequest({
+    ...base,
+    messages: [
+      { role: "user", content: "hi" },
+      {
+        role: "assistant",
+        content: "running it",
+        tool_calls: [{ id: "call-9", type: "function", function: { name: "python", arguments: "{\"code\":\"x\"}" } }],
+      },
+      { role: "tool", content: "out", tool_call_id: "call-9" },
+    ],
+  });
+  const messages = body.messages as Array<Record<string, unknown>>;
+  const assistant = messages[2] as { tool_calls?: Array<{ id?: string }> };
+  assert.equal(assistant.tool_calls?.[0]?.id, "call-9");
+  assert.equal(messages[3]?.tool_call_id, "call-9");
+});

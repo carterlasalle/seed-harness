@@ -16,13 +16,14 @@ import {
   buildSettingsDialog,
   buildSkillsDialog,
   buildToolsDialog,
+  coerceSettingValue,
   commandItems,
   modelItems,
   toolItems,
 } from "./dialogs.ts";
+
 import { slashCommands } from "../app.ts";
 
-// trace:exempt reason=internal-detail
 const noop = (): void => undefined;
 
 // trace:exempt reason=internal-detail
@@ -243,4 +244,36 @@ test("an empty domain renders an explicit empty state, never a blank box", () =>
   assert.ok(render(buildPalette(registry, plainStyler, noop, noop)).includes("no commands registered"));
   assert.ok(render(buildModelDialog(registry, plainStyler, noop, noop)).includes("no models registered"));
   assert.ok(render(buildToolsDialog(registry, plainStyler, noop, noop)).includes("no tools registered"));
+});
+
+test("an enum setting edited in the browser writes back its value", () => {
+  const registry = new SeedRegistry();
+  registry.register("setting", {
+    id: "session.thinking",
+    key: "session.thinking",
+    type: "enum",
+    default: "medium",
+    value: "medium",
+    group: "Session",
+    label: "Reasoning effort",
+    description: "Requested reasoning effort",
+    scope: "session",
+    restart: false,
+    values: ["off", "low", "medium", "high"],
+    source: "builtin",
+  });
+  const dialog = buildSettingsDialog(registry, plainStyler, noop, noop);
+  dialog.selectItem?.("session.thinking");
+  dialog.handleInput?.("\r");
+  assert.equal(registry.get("setting", "session.thinking")?.value, "high");
+});
+
+test("coerceSettingValue keeps numerics numeric and clamps to min/max", () => {
+  assert.equal(coerceSettingValue({ type: "number", min: 1, max: 24 }, "20"), 20);
+  assert.equal(coerceSettingValue({ type: "number", min: 1, max: 24 }, "99"), 24);
+  assert.equal(coerceSettingValue({ type: "number", min: 1, max: 24 }, "0"), 1);
+  assert.equal(coerceSettingValue({ type: "number" }, "abc"), "abc");
+  assert.equal(coerceSettingValue({ type: "boolean" }, "true"), true);
+  assert.equal(coerceSettingValue({ type: "boolean" }, "false"), false);
+  assert.equal(coerceSettingValue({ type: "string" }, "hi"), "hi");
 });
