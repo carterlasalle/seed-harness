@@ -30,6 +30,6 @@
   "dependencies": {
     "@carterlasalle/seed-core": "0.2.0",
     "@carterlasalle/seed-runtime": "0.2.0",
-    "@earendil-works/pi-tui": "1.0.4"
+    "@earendil-works/pi-tui": "1.4.0"
   }
 }
