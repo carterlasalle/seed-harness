@@ -12,7 +12,6 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-
 // sha2 0.11 returns a digest array without a LowerHex implementation.
 // Encode its bytes explicitly so the content-addressed hash stays stable.
 fn finalize_hex(hasher: Sha256) -> String {
@@ -54,4 +53,17 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
         hasher.update(&buf[..n]);
     }
     Ok(finalize_hex(hasher))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sha256_hex;
+
+    #[test]
+    fn sha256_hex_matches_standard_test_vector() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 }
