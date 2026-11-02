@@ -12,12 +12,26 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+
+// sha2 0.11 returns a digest array without a LowerHex implementation.
+// Encode its bytes explicitly so the content-addressed hash stays stable.
+fn finalize_hex(hasher: Sha256) -> String {
+    use std::fmt::Write as _;
+
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest.iter() {
+        write!(&mut hex, "{byte:02x}").expect("writing to String cannot fail");
+    }
+    hex
+}
+
 /// Sha256 hex digest of raw bytes.
 // trace:v1 id=impl.hash-bytes work=WORK-SEED-6VF90M7B satisfies=REQ-SEED-N5PYP0GA
 pub fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
-    format!("{:x}", hasher.finalize())
+    finalize_hex(hasher)
 }
 
 /// Sha256 hex digest of a string slice.
@@ -39,5 +53,5 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(finalize_hex(hasher))
 }
